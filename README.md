@@ -1,5 +1,5 @@
 # harmonix
-Vibecoded test project. private selfhosted music streaming app.
+Vibecoded test project DO NOT TRUST. private selfhosted music streaming app.
 
 Multi-server remote playback: browse your music library from a source server, route audio to any registered player server (or play in-browser).
 
