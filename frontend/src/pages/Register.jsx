@@ -31,7 +31,7 @@ const Register = () => {
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
       <form onSubmit={handleSubmit} style={{ backgroundColor: 'var(--bg-secondary)', padding: '20px', borderRadius: '8px' }}>
         <h2 style={{ margin: 0, marginBottom: '10px', color: 'var(--text)' }}>Register</h2>
-        {error && <p style={{ margin: '0 0 10px', color: '#ff7b7b' }}>{error}</p>}
+        {error && <p style={{ margin: '0 0 10px', color: '#999' }}>{error}</p>}
         <div style={{ marginBottom: '10px' }}>
           <label htmlFor="username" style={{ display: 'block', marginBottom: '5px', color: 'var(--text)' }}>Username</label>
           <input

@@ -27,6 +27,7 @@ node enrich-music.js
 
 ## Key conventions
 
+- `enrich-music.js` — fetches artist bios + images from Wikipedia API (`enrich-music.js:120-122`). Idempotent (skips artists with bio already set). Run after adding music.
 - Backend auto-scans `music/` and seeds the SQLite DB on every startup (`db.js:247-265`)
 - No Vite proxy; frontend API base is hardcoded to `http://localhost:3001/api` (`api/client.js:4`)
 - JWT secret in `backend/.env` (default `supersecretkey123`)
@@ -37,6 +38,7 @@ node enrich-music.js
 - **Servers** are per-user (`servers.user_id`). CRUD scoped to `req.user.id`. No admin-only restriction on the API itself — each user manages their own servers.
 - **Native Main Server** (localhost:3001) is frontend-only for admin: prepended as `id:0, builtin:true` in Servers page + Player dropdown. Not stored in DB. No delete button. Regular users don't see it.
 - **Player component** (`Player.jsx`): three modes — Browser (`<audio>` element, local speakers), Main Server (ffplay on source machine, admin only), Remote Server (ffplay on remote machine). Server selector dropdown in `player-right`. 2s polling for remote status.
+- **Mobile responsive** — `global.css` has `@media (max-width: 768px)` breakpoint. Sidebar becomes slide-out drawer (`translateX(-100%)` → `translateX(0)`, overlay, hamburger toggle). `.hide-mobile` class hides volume/server controls on compact player. Card grids tighten to `minmax(100px, 1fr)`. Servers table hides Port + Status columns. Content gets `padding-left: 48px` to clear the toggle button.
 
 ## Database tables
 
@@ -61,6 +63,9 @@ Every page shell: `<Sidebar /> | <main>content</main> | <Player />` (fixed botto
 - `frontend/src/components/Player.jsx` — three-mode player: Browser / Main Server / Remote Server
 - `frontend/src/pages/Servers.jsx` — server management with Back to Home link, Test button, native Main Server for admin
 - `frontend/src/store/playerStore.js` — `activeServer` + `remoteStatus` state
+- `frontend/src/components/Sidebar.jsx` — hamburger toggle, `menuOpen` state, overlay, `open` class for drawer transform, close-on-nav
+- `frontend/src/styles/global.css` — responsive breakpoints, `.hide-mobile` utility class, theme CSS variables, mobile player/cards/tables styles
+- `enrich-music.js` — standalone Node script for Wikipedia API enrichment (artist bios + images)
 
 ## Potential gotchas
 
@@ -72,3 +77,5 @@ Every page shell: `<Sidebar /> | <main>content</main> | <Player />` (fixed botto
 - Volume uses `pactl` (PulseAudio) with fallback to `amixer` (ALSA). Ensure at least one is available on player servers.
 - Native Main Server (id=0, builtin) is a frontend construct — not in the DB. `stopOnServer()` and other player API calls work the same way for it (local ffplay on port 3001).
 - JWT is shared via `JWT_SECRET` across all servers. `authenticateToken` only verifies the signature (no DB query), so player servers can validate tokens without having users in their DB.
+- `enrich-music.js` needs internet access (Wikipedia API). Rate-limited by Wikipedia's terms.
+- On mobile (<768px), `.content` uses `padding-left: 48px` to keep page titles from being hidden behind the fixed hamburger toggle.

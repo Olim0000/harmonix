@@ -270,8 +270,8 @@ const Player = () => {
             <div className="player-progress-fill" style={{ width: `${progressPct}%` }} />
             <div className="player-progress-thumb" style={{ left: `${progressPct}%` }} />
           </div>
-          <span className="player-time">{formatTime(displayTime)}</span>
-          <span className="player-time">{formatTime(duration)}</span>
+          <span className="player-time hide-mobile">{formatTime(displayTime)}</span>
+          <span className="player-time hide-mobile">{formatTime(duration)}</span>
         </div>
       </div>
 
@@ -282,12 +282,12 @@ const Player = () => {
           </span>
         )}
 
-        <button type="button" className="player-btn" onClick={toggleMute} title={volume > 0 ? 'Mute' : 'Unmute'}>
+        <button type="button" className="player-btn hide-mobile" onClick={toggleMute} title={volume > 0 ? 'Mute' : 'Unmute'}>
           {volume > 0 ? <FiVolume2 size={18} /> : <FiVolumeX size={18} />}
         </button>
         <input
           type="range"
-          className="player-volume"
+          className="player-volume hide-mobile"
           min="0"
           max="1"
           step="0.02"

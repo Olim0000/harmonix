@@ -82,7 +82,7 @@ const TrackRow = ({ track }) => {
               <p>{addedMsg}</p>
             ) : (
               <>
-                {pickerError && <p style={{ fontSize: '0.85rem', color: '#ff7b7b', marginBottom: '8px' }}>{pickerError}</p>}
+                {pickerError && <p style={{ fontSize: '0.85rem', color: '#999', marginBottom: '8px' }}>{pickerError}</p>}
                 {playlists.length > 0 ? (
                   <div className="playlist-picker-list">
                     {playlists.map((pl) => (
@@ -108,7 +108,7 @@ const TrackRow = ({ track }) => {
                       disabled={creatingInline}
                       onKeyDown={(e) => { if (e.key === 'Enter') handleCreateInline(); }}
                     />
-                    {inlineError && <p style={{ fontSize: '0.85rem', color: '#ff7b7b', margin: '4px 0 0' }}>{inlineError}</p>}
+                    {inlineError && <p style={{ fontSize: '0.85rem', color: '#999', margin: '4px 0 0' }}>{inlineError}</p>}
                     <button
                       type="button"
                       className="primary"

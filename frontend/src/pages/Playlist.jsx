@@ -74,7 +74,7 @@ const Playlist = () => {
           </div>
           {loading && <p className="loading-text">Loading playlist...</p>}
           {error && <p className="error-text">{error}</p>}
-          {removeError && <p style={{ color: '#ff7b7b', fontSize: '0.9rem', margin: '8px 0' }}>{removeError}</p>}
+          {removeError && <p style={{ color: '#999', fontSize: '0.9rem', margin: '8px 0' }}>{removeError}</p>}
           <div className="playlist-actions">
             <button type="button" className="btn-danger" onClick={handleDeletePlaylist} disabled={deleting}>
               {deleting ? 'Deleting...' : 'Delete Playlist'}

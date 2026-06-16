@@ -115,7 +115,7 @@ const Playlists = () => {
                 disabled={creating}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
               />
-              {createError && <p style={{ fontSize: '0.85rem', color: '#ff7b7b', margin: '8px 0 0' }}>{createError}</p>}
+              {createError && <p style={{ fontSize: '0.85rem', color: '#999', margin: '8px 0 0' }}>{createError}</p>}
               <div className="modal-actions">
                 <button type="button" onClick={() => setShowCreate(false)} disabled={creating}>Cancel</button>
                 <button type="button" className="primary" onClick={handleCreate} disabled={creating}>

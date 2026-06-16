@@ -161,7 +161,7 @@ const Admin = () => {
                                 <button type="button" className="btn-primary" onClick={() => handleResetPassword(u.id)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>
                                   Save
                                 </button>
-                                {resetError && <span style={{ color: '#ff7b7b', fontSize: '0.8rem' }}>{resetError}</span>}
+                                {resetError && <span style={{ color: '#999', fontSize: '0.8rem' }}>{resetError}</span>}
                               </div>
                             )}
                           </div>
@@ -189,7 +189,7 @@ const Admin = () => {
               </button>
               {log && (
                 <pre style={{
-                  marginTop: '16px', padding: '12px', background: '#000', color: '#0f0',
+                  marginTop: '16px', padding: '12px', background: '#000', color: '#ccc',
                   borderRadius: '4px', fontSize: '0.8rem', maxHeight: '400px', overflow: 'auto',
                   whiteSpace: 'pre-wrap', wordBreak: 'break-all',
                 }}>

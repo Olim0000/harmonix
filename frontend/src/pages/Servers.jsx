@@ -181,7 +181,7 @@ const Servers = () => {
                         ) : result === 'online' ? (
                           <FiCheckCircle size={14} style={{ color: 'var(--accent)' }} />
                         ) : result === 'error' || result === 'offline' ? (
-                          <FiXCircle size={14} style={{ color: '#ff7b7b' }} />
+                          <FiXCircle size={14} style={{ color: '#999' }} />
                         ) : (
                           <FiRefreshCw size={14} />
                         )}

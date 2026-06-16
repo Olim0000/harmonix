@@ -33,6 +33,7 @@ node enrich-music.js
 ## Features
 
 - Artist/album/track browsing with album art (iTunes → Deezer → Cover Art Archive)
+- Artist bios & images from Wikipedia — run `node enrich-music.js` to fetch automatically
 - Playlists (create, add/remove tracks, duplicate detection)
 - Search with album cards + track results
 - Admin panel: user management, DB enrichment with live log
@@ -40,6 +41,7 @@ node enrich-music.js
 - ffplay singleton on each server with play/pause/seek/volume
 - Shuffle/repeat modes, volume control, progress bar with seek
 - Dark theme, Feather icons, monochrome minimal aesthetic
+- Mobile responsive — sidebar slide-out drawer, compact player, adaptive cards/tables on phones
 
 ## Permissions
 
