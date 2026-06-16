@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiPlay, FiPause, FiSkipBack, FiSkipForward, FiShuffle, FiRepeat, FiVolume2, FiVolumeX, FiServer, FiChevronDown } from 'react-icons/fi';
+import { FiPlay, FiPause, FiSkipBack, FiSkipForward, FiShuffle, FiRepeat, FiVolume2, FiVolumeX, FiServer, FiChevronDown, FiMaximize2 } from 'react-icons/fi';
 import { usePlayerStore } from '../store/playerStore';
 import { playOnServer, pauseOnServer, resumeOnServer, stopOnServer, seekOnServer, setVolumeOnServer, getServerStatus } from '../api/player';
 import { useAuthStore } from '../store/authStore';
@@ -342,6 +342,9 @@ const Player = () => {
       </div>
 
       <div className="player-right">
+        <button type="button" className="player-btn" onClick={() => setFullScreen(true)} disabled={!currentTrack} title="Now playing">
+          <FiMaximize2 size={16} />
+        </button>
         {activeServer && (
           <span className="player-server-badge" title={`Playing on ${activeServer.name}`}>
             <FiServer size={12} /> {activeServer.name}

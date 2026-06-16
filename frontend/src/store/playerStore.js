@@ -24,15 +24,9 @@ export const usePlayerStore = create((set, get) => ({
 
   setVolume: (volume) => set({ volume }),
 
-  toggleShuffle: () => set((state) => {
-    const newShuffle = !state.shuffle;
-    return { shuffle: newShuffle, repeat: newShuffle ? false : state.repeat };
-  }),
+  toggleShuffle: () => set((state) => ({ shuffle: !state.shuffle })),
 
-  toggleRepeat: () => set((state) => {
-    const newRepeat = !state.repeat;
-    return { repeat: newRepeat, shuffle: newRepeat ? false : state.shuffle };
-  }),
+  toggleRepeat: () => set((state) => ({ repeat: !state.repeat })),
 
   setCurrentTime: (currentTime) => set({ currentTime }),
 
