@@ -41,6 +41,9 @@ node enrich-music.js
 - ffplay singleton on each server with play/pause/seek/volume
 - Shuffle/repeat modes, volume control, progress bar with seek
 - Dark theme, Feather icons, monochrome minimal aesthetic
+- Full-screen now-playing overlay — tap album art for big view with progress, controls, and volume
+- Keyboard shortcuts — Space=play/pause, ←→=seek, N/P=next/prev, M=mute, Escape=close fullscreen
+- Shuffle/repeat mutual exclusion — enabling one disables the other
 - Mobile responsive — sidebar slide-out drawer, compact player, adaptive cards/tables on phones
 
 ## Permissions

@@ -37,7 +37,7 @@ node enrich-music.js
 - **Player API** (`backend/routes/player.js`): 7 endpoints, all JWT-protected (`authenticateToken`). Stream endpoint (`tracks.js:52`) has no auth — ffplay can fetch from source server without headers.
 - **Servers** are per-user (`servers.user_id`). CRUD scoped to `req.user.id`. No admin-only restriction on the API itself — each user manages their own servers.
 - **Native Main Server** (localhost:3001) is frontend-only for admin: prepended as `id:0, builtin:true` in Servers page + Player dropdown. Not stored in DB. No delete button. Regular users don't see it.
-- **Player component** (`Player.jsx`): three modes — Browser (`<audio>` element, local speakers), Main Server (ffplay on source machine, admin only), Remote Server (ffplay on remote machine). Server selector dropdown in `player-right`. 2s polling for remote status.
+- **Player component** (`Player.jsx`): three modes — Browser (`<audio>` element, local speakers), Main Server (ffplay on source machine, admin only), Remote Server (ffplay on remote machine). Server selector dropdown in `player-right`. 2s polling for remote status. Full-screen now-playing overlay (tap track info to open, Escape/close button to dismiss) with big album art, progress bar, controls, and volume. Keyboard shortcuts: Space=play/pause, ←→=seek ±5s, N=next, P=previous, M=mute, Escape=close fullscreen.
 - **Mobile responsive** — `global.css` has `@media (max-width: 768px)` breakpoint. Sidebar becomes slide-out drawer (`translateX(-100%)` → `translateX(0)`, overlay, hamburger toggle). `.hide-mobile` class hides volume/server controls on compact player. Card grids tighten to `minmax(100px, 1fr)`. Servers table hides Port + Status columns. Content gets `padding-left: 48px` to clear the toggle button.
 
 ## Database tables
@@ -60,9 +60,9 @@ Every page shell: `<Sidebar /> | <main>content</main> | <Player />` (fixed botto
 - `backend/routes/player.js` — play/pause/resume/stop/seek/volume/status endpoints
 - `backend/routes/servers.js` — per-user server CRUD (GET/POST/DELETE)
 - `frontend/src/api/player.js` — `fetch`-based helper to send commands to `http://{host}:{port}/api/player/*`
-- `frontend/src/components/Player.jsx` — three-mode player: Browser / Main Server / Remote Server
+- `frontend/src/components/Player.jsx` — three-mode player: Browser / Main Server / Remote Server; full-screen now-playing overlay; keyboard shortcuts; time-based seek guard (500ms); server debounce (300ms)
 - `frontend/src/pages/Servers.jsx` — server management with Back to Home link, Test button, native Main Server for admin
-- `frontend/src/store/playerStore.js` — `activeServer` + `remoteStatus` state
+- `frontend/src/store/playerStore.js` — `activeServer` + `remoteStatus` state; shuffle/repeat mutually exclusive
 - `frontend/src/components/Sidebar.jsx` — hamburger toggle, `menuOpen` state, overlay, `open` class for drawer transform, close-on-nav
 - `frontend/src/styles/global.css` — responsive breakpoints, `.hide-mobile` utility class, theme CSS variables, mobile player/cards/tables styles
 - `enrich-music.js` — standalone Node script for Wikipedia API enrichment (artist bios + images)

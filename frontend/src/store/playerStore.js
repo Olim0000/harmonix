@@ -24,9 +24,15 @@ export const usePlayerStore = create((set, get) => ({
 
   setVolume: (volume) => set({ volume }),
 
-  toggleShuffle: () => set((state) => ({ shuffle: !state.shuffle })),
+  toggleShuffle: () => set((state) => {
+    const newShuffle = !state.shuffle;
+    return { shuffle: newShuffle, repeat: newShuffle ? false : state.repeat };
+  }),
 
-  toggleRepeat: () => set((state) => ({ repeat: !state.repeat })),
+  toggleRepeat: () => set((state) => {
+    const newRepeat = !state.repeat;
+    return { repeat: newRepeat, shuffle: newRepeat ? false : state.shuffle };
+  }),
 
   setCurrentTime: (currentTime) => set({ currentTime }),
 
@@ -43,7 +49,12 @@ export const usePlayerStore = create((set, get) => ({
     const currentIndex = state.queue.findIndex((track) => track.id === state.currentTrack.id);
     let nextIndex;
     if (state.shuffle) {
-      nextIndex = Math.floor(Math.random() * state.queue.length);
+      if (state.queue.length > 1) {
+        do { nextIndex = Math.floor(Math.random() * state.queue.length); }
+        while (nextIndex === currentIndex);
+      } else {
+        nextIndex = currentIndex;
+      }
     } else {
       nextIndex = (currentIndex + 1) % state.queue.length;
     }
