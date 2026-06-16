@@ -7,19 +7,23 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
     try {
       const response = await client.post('/auth/login', { username, password });
-      login({ username }, response.data.token);
+      login({ username, is_admin: response.data.is_admin }, response.data.token);
       navigate('/');
     } catch (error) {
       console.error('Login failed:', error);
       setError('Invalid username or password.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -50,8 +54,8 @@ const Login = () => {
             style={{ width: '100%', padding: '8px', border: 'none', borderRadius: '4px' }}
           />
         </div>
-        <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-          Login
+        <button type="submit" disabled={submitting} style={{ width: '100%', padding: '10px', backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: '4px', cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.6 : 1 }}>
+          {submitting ? 'Logging in...' : 'Login'}
         </button>
       </form>
     </div>

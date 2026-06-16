@@ -1,0 +1,7 @@
+node_modules/
+music/
+.vscode/
+*.db-shm
+*.db-wal
+backend/.env
+frontend/dist/

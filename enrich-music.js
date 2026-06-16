@@ -16,23 +16,39 @@
  *   7. Saves covers to frontend/public/covers/
  * 
  * Install deps first:
- *   npm install music-metadata better-sqlite3 node-fetch@2
+ *   npm install music-metadata better-sqlite3
  */
 
 const fs = require("fs");
 const path = require("path");
 const mm = require("music-metadata");
 const Database = require("better-sqlite3");
-const fetch = require("node-fetch");
 const https = require("https");
+require("dotenv").config({ path: path.join(__dirname, "backend", ".env"), quiet: true });
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 
-const MUSIC_DIR = path.resolve(__dirname, "music");
-const DB_PATH = path.resolve(__dirname, "backend/harmonix.db");
+const MUSIC_DIR = process.env.MUSIC_DIR
+  ? path.resolve(__dirname, process.env.MUSIC_DIR)
+  : path.resolve(__dirname, "music");
+const DB_PATH = process.env.DB_PATH
+  ? path.resolve(__dirname, "backend", process.env.DB_PATH)
+  : path.resolve(__dirname, "backend/harmonix.db");
 const COVERS_DIR = path.resolve(__dirname, "frontend/public/covers");
 const SUPPORTED = [".flac", ".mp3", ".ogg", ".m4a", ".opus"];
 const DELAY_MS = 1200; // be polite to free APIs
+
+// ─── DB ──────────────────────────────────────────────────────────────────────
+
+let db;
+
+function openDb() {
+  if (!db) {
+    db = new Database(DB_PATH);
+    db.pragma("journal_mode = WAL");
+  }
+  return db;
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -66,8 +82,8 @@ function parseFilename(filename) {
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
-    https.get(url, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
+    https.get(url, { headers: { "User-Agent": "Harmonix/1.0 (self-hosted music app)" } }, (res) => {
+      if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
         file.close();
         fs.unlinkSync(destPath);
         downloadFile(res.headers.location, destPath).then(resolve).catch(reject);
@@ -84,7 +100,7 @@ function downloadFile(url, destPath) {
 
 // ─── WIKIPEDIA BIO ───────────────────────────────────────────────────────────
 
-async function fetchWikipediaBio(artistName) {
+async function fetchWikipediaData(artistName) {
   try {
     const encoded = encodeURIComponent(artistName);
     const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`;
@@ -101,9 +117,9 @@ async function fetchWikipediaBio(artistName) {
     const isMusic = musicKeywords.some((kw) => lowerExtract.includes(kw));
     if (!isMusic) {
       // Still return it but flag it — might be a false match
-      return extract + "\n\n[Note: Wikipedia match may not be the musician — verify manually]";
+      return { bio: extract + "\n\n[Note: Wikipedia match may not be the musician — verify manually]", imageUrl: data.thumbnail?.source || null };
     }
-    return extract;
+    return { bio: extract, imageUrl: data.thumbnail?.source || null };
   } catch {
     return null;
   }
@@ -137,11 +153,96 @@ async function searchMusicBrainz(artistName, album) {
  * Downloads to COVERS_DIR and returns the relative web path.
  */
 async function fetchCover(releaseId, slug) {
+  const url = `https://coverartarchive.org/release/${releaseId}/front-500`;
+  const destPath = path.join(COVERS_DIR, `${slug}.jpg`);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await downloadFile(url, destPath);
+      return destPath;
+    } catch {
+      if (attempt === 0) await sleep(2000);
+    }
+  }
+  return null;
+}
+
+// ─── COVER ART FROM ITUNES ────────────────────────────────────────────────────
+
+/**
+ * Search iTunes for album artwork, download it, and return the relative path.
+ * Returns null if not found or download fails.
+ */
+async function fetchCoverFromITunes(artistName, albumName) {
+  const term = encodeURIComponent(`${artistName} ${albumName}`);
+  const url = `https://itunes.apple.com/search?term=${term}&entity=album&limit=5`;
   try {
-    const url = `https://coverartarchive.org/release/${releaseId}/front-500`;
+    const res = await fetch(url, { headers: { "User-Agent": "Harmonix/1.0" } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.results || data.results.length === 0) return null;
+
+    // Find best match — case-insensitive check if album name appears in collectionName
+    const albumLower = albumName.toLowerCase();
+    const match = data.results.find((r) =>
+      r.collectionName && r.collectionName.toLowerCase().includes(albumLower)
+    );
+    if (!match) return null;
+
+    // Artwork URL: replace 100x100 with 600x600 for a larger image
+    const artUrl = match.artworkUrl100.replace("100x100", "600x600");
+    const slug = Buffer.from(`${artistName}||${albumName}`).toString("base64url").slice(0, 40);
     const destPath = path.join(COVERS_DIR, `${slug}.jpg`);
-    await downloadFile(url, destPath);
-    return `/covers/${slug}.jpg`;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await downloadFile(artUrl, destPath);
+        return destPath;
+      } catch {
+        if (attempt === 0) await sleep(2000);
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── COVER ART FROM DEEZER ─────────────────────────────────────────────────────
+
+/**
+ * Search Deezer for album artwork, download it, and return the relative path.
+ * Returns null if not found or download fails.
+ */
+async function fetchCoverFromDeezer(artistName, albumName) {
+  const term = encodeURIComponent(`${artistName} ${albumName}`);
+  const url = `https://api.deezer.com/search/album?q=${term}&limit=5`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Harmonix/1.0" } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.data || data.data.length === 0) return null;
+
+    // Find best match — case-insensitive check if album name appears
+    const albumLower = albumName.toLowerCase();
+    const match = data.data.find((r) =>
+      r.title && r.title.toLowerCase().includes(albumLower)
+    );
+    if (!match) return null;
+
+    // Use large cover (replace 250x250 with 1000x1000)
+    const artUrl = match.cover_medium.replace("250x250", "1000x1000");
+    const slug = Buffer.from(`${artistName}||${albumName}`).toString("base64url").slice(0, 40);
+    const destPath = path.join(COVERS_DIR, `${slug}.jpg`);
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await downloadFile(artUrl, destPath);
+        return destPath;
+      } catch {
+        if (attempt === 0) await sleep(2000);
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -157,7 +258,7 @@ async function main() {
   }
   fs.mkdirSync(COVERS_DIR, { recursive: true });
 
-  const db = new Database(DB_PATH);
+  openDb();
 
   // Ensure schema exists (safe to run even if tables already exist)
   db.exec(`
@@ -180,22 +281,20 @@ async function main() {
     );
   `);
 
-  const insertArtist = db.prepare(`
-    INSERT INTO artists (name) VALUES (?)
-    ON CONFLICT(name) DO NOTHING
-  `);
+  const getArtistId = db.prepare(`SELECT id FROM artists WHERE name = ?`);
+  const createArtist = db.prepare(`INSERT INTO artists (name) VALUES (?)`);
   const getArtist = db.prepare(`SELECT * FROM artists WHERE name = ?`);
   const updateArtistBio = db.prepare(`UPDATE artists SET bio = ? WHERE id = ?`);
+  const updateArtistBioAndImage = db.prepare(`UPDATE artists SET bio = ?, image_url = ? WHERE id = ?`);
   const updateArtistImage = db.prepare(`UPDATE artists SET image_url = ? WHERE id = ?`);
-  const insertTrack = db.prepare(`
+  const getTrackByPath = db.prepare(`SELECT id FROM tracks WHERE file_path = ?`);
+  const updateTrack = db.prepare(`
+    UPDATE tracks SET title = ?, artist_id = ?, album = ?, duration_seconds = ?, cover_url = ?
+    WHERE file_path = ?
+  `);
+  const createTrack = db.prepare(`
     INSERT INTO tracks (title, artist_id, album, duration_seconds, file_path, cover_url)
-    VALUES (@title, @artist_id, @album, @duration_seconds, @file_path, @cover_url)
-    ON CONFLICT(file_path) DO UPDATE SET
-      title = excluded.title,
-      artist_id = excluded.artist_id,
-      album = excluded.album,
-      duration_seconds = excluded.duration_seconds,
-      cover_url = excluded.cover_url
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   // Scan music folder recursively
@@ -254,34 +353,47 @@ async function main() {
     }
 
     // Insert artist
-    insertArtist.run(artistName);
-    const artist = getArtist.get(artistName);
+    let artist = getArtistId.get(artistName);
+    if (!artist) {
+      const info = createArtist.run(artistName);
+      artist = { id: info.lastInsertRowid };
+    }
 
     // Insert/update track
-    insertTrack.run({
-      title,
-      artist_id: artist.id,
-      album: album || null,
-      duration_seconds: duration || null,
-      file_path: relativePath,
-      cover_url: null,
-    });
+    const existingTrack = getTrackByPath.get(filePath);
+    if (existingTrack) {
+      updateTrack.run(title, artist.id, album || null, duration || null, null, filePath);
+    } else {
+      createTrack.run(title, artist.id, album || null, duration || null, filePath, null);
+    }
 
     console.log(`  ✓  ${artistName} — ${title}`);
   }
 
-  // ── STEP 2: Enrich artists with Wikipedia bios ────────────────────────────
+  // ── STEP 2: Enrich artists with Wikipedia bios + pictures ─────────────────
 
-  console.log("\n── Step 2: Fetching Wikipedia bios ──\n");
+  console.log("\n── Step 2: Fetching Wikipedia data ──\n");
 
-  const artistsNoBio = db.prepare(`SELECT * FROM artists WHERE bio IS NULL`).all();
+  const artistsNoBio = db.prepare(`SELECT * FROM artists WHERE bio IS NULL OR image_url IS NULL`).all();
 
   for (const artist of artistsNoBio) {
     process.stdout.write(`  Wikipedia: ${artist.name} ... `);
-    const bio = await fetchWikipediaBio(artist.name);
-    if (bio) {
-      updateArtistBio.run(bio, artist.id);
-      console.log("✓");
+    const wiki = await fetchWikipediaData(artist.name);
+    if (wiki) {
+      let imageUrl = null;
+      if (wiki.imageUrl) {
+        const ext = path.extname(new URL(wiki.imageUrl).pathname).split("?")[0] || ".jpg";
+        const imgName = `artist-${artist.id}${ext}`;
+        const imgPath = path.join(COVERS_DIR, imgName);
+        try {
+          await downloadFile(wiki.imageUrl, imgPath);
+          imageUrl = `/covers/${imgName}`;
+        } catch {
+          // image download failed, proceed without it
+        }
+      }
+      updateArtistBioAndImage.run(wiki.bio, imageUrl, artist.id);
+      console.log(imageUrl ? "✓ bio + image" : "✓ bio only");
     } else {
       console.log("not found");
     }
@@ -318,27 +430,38 @@ async function main() {
     const label = track.album
       ? `${track.artist_name} — ${track.album}`
       : track.artist_name;
-    process.stdout.write(`  Cover Art Archive: ${label} ... `);
 
-    const releaseId = await searchMusicBrainz(track.artist_name, track.album);
+    // Try iTunes first
+    process.stdout.write(`  Cover: ${label} ... `);
+    let coverUrl = await fetchCoverFromITunes(track.artist_name, track.album);
     await sleep(DELAY_MS);
 
-    if (!releaseId) {
-      console.log("not found");
-      coverMap[key] = null;
-      continue;
+    // Fall back to Deezer
+    if (!coverUrl) {
+      process.stdout.write(`iTunes: not found, trying Deezer ... `);
+      coverUrl = await fetchCoverFromDeezer(track.artist_name, track.album);
+      await sleep(DELAY_MS);
     }
 
-    const slug = Buffer.from(key).toString("base64url").slice(0, 40);
-    const coverUrl = await fetchCover(releaseId, slug);
-    await sleep(DELAY_MS);
+    // Fall back to MusicBrainz + Cover Art Archive
+    if (!coverUrl) {
+      process.stdout.write(`Deezer: not found, trying Cover Art Archive ... `);
+      const releaseId = await searchMusicBrainz(track.artist_name, track.album);
+      await sleep(DELAY_MS);
+
+      if (releaseId) {
+        const slug = Buffer.from(key).toString("base64url").slice(0, 40);
+        coverUrl = await fetchCover(releaseId, slug);
+        await sleep(DELAY_MS);
+      }
+    }
 
     if (coverUrl) {
       coverMap[key] = coverUrl;
       console.log(`✓  ${coverUrl}`);
     } else {
       coverMap[key] = null;
-      console.log("download failed");
+      console.log("not found");
     }
   }
 

@@ -15,6 +15,12 @@ function authenticateToken(req, res, next) {
   });
 }
 
+function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.is_admin) return res.sendStatus(403);
+  next();
+}
+
 module.exports = { 
   authenticateToken,
+  requireAdmin,
 };

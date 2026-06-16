@@ -38,7 +38,11 @@ router.get('/:id/cover', (req, res) => {
   db.get("SELECT cover_url FROM tracks WHERE id = ?", [req.params.id], (err, track) => {
     if (err || !track || !track.cover_url) return res.status(404).json({ error: 'Cover not found' });
 
-    const filePath = path.resolve(track.cover_url);
+    const coversDir = path.resolve(__dirname, '..', 'frontend', 'public', 'covers');
+    const filePath = track.cover_url.startsWith('/covers/')
+      ? path.join(coversDir, path.basename(track.cover_url))
+      : path.resolve(track.cover_url);
+
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Cover not found' });
 
     res.sendFile(filePath);

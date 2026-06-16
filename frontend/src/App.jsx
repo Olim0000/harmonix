@@ -7,7 +7,12 @@ import Home from './pages/Home';
 import Search from './pages/Search';
 import Library from './pages/Library';
 import Playlist from './pages/Playlist';
+import Playlists from './pages/Playlists';
+import Admin from './pages/Admin';
+import Servers from './pages/Servers';
+import Artists from './pages/Artists';
 import ArtistPage from './pages/ArtistPage';
+import AlbumPage from './pages/AlbumPage';
 
 const App = () => {
   return (
@@ -19,8 +24,13 @@ const App = () => {
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/artists" element={<Artists />} />
+          <Route path="/playlists" element={<Playlists />} />
           <Route path="/playlist/:id" element={<Playlist />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/servers" element={<Servers />} />
           <Route path="/artist/:id" element={<ArtistPage />} />
+          <Route path="/album/:artistId/:albumName" element={<AlbumPage />} />
         </Route>
       </Routes>
     </Router>

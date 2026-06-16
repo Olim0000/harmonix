@@ -28,11 +28,21 @@ function openDb() {
 
 const createTableSql = `
   PRAGMA foreign_keys = ON;
+  PRAGMA journal_mode = WAL;
 
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS servers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL DEFAULT 3001,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -94,7 +104,7 @@ function parseAlbumFolder(folderName) {
 
   return {
     artist: match[1].trim() || 'Unknown Artist',
-    album: match[2].trim() || folderName,
+    album: match[3] ? `${match[2].trim()} (${match[3]})` : match[2].trim() || folderName,
   };
 }
 
@@ -123,9 +133,18 @@ function migrateSchema(database, callback) {
     if (err) return callback(err);
 
     const hasAlbum = columns.some((column) => column.name === 'album');
-    if (hasAlbum) return callback();
+    if (!hasAlbum) {
+      database.run('ALTER TABLE tracks ADD COLUMN album TEXT');
+    }
 
-    database.run('ALTER TABLE tracks ADD COLUMN album TEXT', callback);
+    database.all('PRAGMA table_info(users)', (err, userCols) => {
+      if (err) return callback(err);
+
+      const hasAdmin = userCols.some((col) => col.name === 'is_admin');
+      if (hasAdmin) return callback();
+
+      database.run("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0", callback);
+    });
   });
 }
 
@@ -244,6 +263,19 @@ function repairPlaylistTracksTable(database, callback) {
   });
 }
 
+function seedAdminUser(database, callback) {
+  database.get("SELECT id FROM users WHERE is_admin = 1", (err, row) => {
+    if (err) return callback(err);
+    if (row) return callback();
+
+    const bcrypt = require('bcryptjs');
+    bcrypt.hash('admin123', 10, (hashErr, hash) => {
+      if (hashErr) return callback(hashErr);
+      database.run("INSERT OR IGNORE INTO users (username, password_hash, is_admin) VALUES (?, ?, 1)", ['admin', hash], callback);
+    });
+  });
+}
+
 function initializeDb(callback) {
   const database = openDb();
 
@@ -257,7 +289,11 @@ function initializeDb(callback) {
         migrateSchema(database, (migrationErr) => {
           if (migrationErr) return callback(migrationErr);
 
-          seedMusicLibrary(database, callback);
+          seedAdminUser(database, (seedErr) => {
+            if (seedErr) return callback(seedErr);
+
+            seedMusicLibrary(database, callback);
+          });
         });
       });
     });

@@ -7,12 +7,14 @@ const Register = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuthStore();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
     try {
       const response = await client.post('/auth/register', { username, password });
       login({ username }, response.data.token);
@@ -20,6 +22,8 @@ const Register = () => {
     } catch (error) {
       console.error('Registration failed:', error);
       setError(error.response?.data?.message || 'Registration failed.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -50,8 +54,8 @@ const Register = () => {
             style={{ width: '100%', padding: '8px', border: 'none', borderRadius: '4px' }}
           />
         </div>
-        <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-          Register
+        <button type="submit" disabled={submitting} style={{ width: '100%', padding: '10px', backgroundColor: 'var(--accent)', color: 'white', border: 'none', borderRadius: '4px', cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.6 : 1 }}>
+          {submitting ? 'Registering...' : 'Register'}
         </button>
       </form>
     </div>
