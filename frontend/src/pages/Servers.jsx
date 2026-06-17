@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiTrash2, FiPlay, FiArrowLeft, FiCheckCircle, FiXCircle, FiRefreshCw } from 'react-icons/fi';
+import { FiTrash2, FiPlay, FiArrowLeft, FiCheckCircle, FiXCircle, FiRefreshCw } from '../icons';
 import client from '../api/client';
-import { usePlayerStore } from '../store/playerStore';
-import { useAuthStore } from '../store/authStore';
+import { usePlayer } from '../store/PlayerContext';
+import { useAuth } from '../store/AuthContext';
 
 const NATIVE_MAIN_SERVER = { id: 0, name: 'Main Server', host: window.location.hostname, port: 3001, builtin: true };
 
@@ -18,9 +18,8 @@ const Servers = () => {
   const [addError, setAddError] = useState('');
   const [testing, setTesting] = useState({});
   const [testResult, setTestResult] = useState({});
-  const activeServer = usePlayerStore((s) => s.activeServer);
-  const setActiveServer = usePlayerStore((s) => s.setActiveServer);
-  const user = useAuthStore((s) => s.user);
+  const { activeServer, setActiveServer } = usePlayer();
+  const { user } = useAuth();
 
   const fetchServers = useCallback(() => {
     setLoading(true);
@@ -86,7 +85,7 @@ const Servers = () => {
   }, []);
 
   return (
-    <div className="content">
+    <PageLayout>
       <Link to="/" className="back-link"><FiArrowLeft size={16} /> Back to Home</Link>
 
       <div className="page-header">
@@ -102,34 +101,10 @@ const Servers = () => {
         <div className="servers-form">
           <h3>Add Server</h3>
           <div className="servers-form-row">
-            <input
-              type="text"
-              placeholder="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={adding}
-            />
-            <input
-              type="text"
-              placeholder="Host"
-              value={host}
-              onChange={(e) => setHost(e.target.value)}
-              disabled={adding}
-            />
-            <input
-              type="number"
-              placeholder="Port"
-              value={port}
-              onChange={(e) => setPort(e.target.value)}
-              disabled={adding}
-              style={{ width: '100px' }}
-            />
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={handleAdd}
-              disabled={adding || !name.trim() || !host.trim()}
-            >
+            <input type="text" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} disabled={adding} />
+            <input type="text" placeholder="Host" value={host} onChange={(e) => setHost(e.target.value)} disabled={adding} />
+            <input type="number" placeholder="Port" value={port} onChange={(e) => setPort(e.target.value)} disabled={adding} style={{ width: '100px' }} />
+            <button type="button" className="btn-primary" onClick={handleAdd} disabled={adding || !name.trim() || !host.trim()}>
               {adding ? 'Adding...' : 'Add'}
             </button>
           </div>
@@ -169,13 +144,7 @@ const Servers = () => {
                     <td>{s.host}</td>
                     <td>{s.port}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="test-btn"
-                        onClick={() => handleTest(s)}
-                        disabled={isTesting}
-                        title="Test connection"
-                      >
+                      <button type="button" className="test-btn" onClick={() => handleTest(s)} disabled={isTesting} title="Test connection">
                         {isTesting ? (
                           <FiRefreshCw size={14} className="spin" />
                         ) : result === 'online' ? (
@@ -191,23 +160,12 @@ const Servers = () => {
                       {result === 'offline' && <span className="test-label offline">Offline</span>}
                     </td>
                     <td className="servers-actions">
-                      <button
-                        type="button"
-                        className="btn-primary"
-                        onClick={() => handleSelect(s)}
-                        disabled={isActive}
-                        style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                      >
+                      <button type="button" className="btn-primary" onClick={() => handleSelect(s)} disabled={isActive} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>
                         <FiPlay size={14} style={{ marginRight: '4px' }} />
                         {isActive ? 'Selected' : 'Select'}
                       </button>
                       {!isBuiltin && (
-                        <button
-                          type="button"
-                          className="btn-danger"
-                          onClick={() => handleDelete(s.id)}
-                          style={{ padding: '4px 10px', fontSize: '0.8rem', marginLeft: '6px' }}
-                        >
+                        <button type="button" className="btn-danger" onClick={() => handleDelete(s.id)} style={{ padding: '4px 10px', fontSize: '0.8rem', marginLeft: '6px' }}>
                           <FiTrash2 size={14} />
                         </button>
                       )}
@@ -219,7 +177,7 @@ const Servers = () => {
           </table>
         )}
       </div>
-    </div>
+    </PageLayout>
   );
 };
 

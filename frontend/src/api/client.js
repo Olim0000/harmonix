@@ -1,33 +1,43 @@
-import axios from 'axios';
+const BASE_URL = 'http://localhost:3001/api';
 
-const client = axios.create({
-  baseURL: 'http://localhost:3001/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+function getToken() {
+  return localStorage.getItem('token');
+}
 
-client.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+async function request(endpoint, options = {}) {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options.headers,
+    },
+  });
 
-client.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 403) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('username');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
+  if (res.status === 403) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    localStorage.removeItem('is_admin');
+    window.location.href = '/login';
+    throw new Error('Session expired');
   }
-);
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ message: res.statusText }));
+    const err = new Error(body?.message || `HTTP ${res.status}`);
+    err.response = { data: body, status: res.status };
+    throw err;
+  }
+
+  const data = await res.json();
+  return { data };
+}
+
+const client = {
+  get: (endpoint) => request(endpoint),
+  post: (endpoint, body) => request(endpoint, { method: 'POST', body: JSON.stringify(body) }),
+  delete: (endpoint) => request(endpoint, { method: 'DELETE' }),
+};
 
 export default client;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import client from '../api/client';
-import { useAuthStore } from '../store/authStore';
+import { useAuth } from '../store/AuthContext';
 
 const Register = () => {
   const [username, setUsername] = useState('');
@@ -9,7 +9,7 @@ const Register = () => {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuthStore();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();

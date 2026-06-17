@@ -6,7 +6,7 @@ Multi-server remote playback: browse your music library from a source server, ro
 ## Stack
 
 - **Backend**: Express.js + SQLite3 + JWT auth (bcryptjs)
-- **Frontend**: React 18 + Vite 5 + Zustand + react-router-dom + Axios + Feather icons
+- **Frontend**: React 18 + Vite 5 + react-router-dom (no external state libs)
 - **Audio**: ffplay (server-side), HTTP range streaming (browser), `<audio>` element
 
 ## Quick start
@@ -17,9 +17,6 @@ cd backend && node server.js
 
 # frontend (needs backend on :3001)
 cd frontend && npm run dev
-
-# metadata enrichment
-node enrich-music.js
 ```
 
 ## Architecture
@@ -32,15 +29,17 @@ node enrich-music.js
 
 ## Features
 
-- Artist/album/track browsing with album art (iTunes → Deezer → Cover Art Archive)
-- Artist bios & images from Wikipedia — run `node enrich-music.js` to fetch automatically
+- Artist/album/track browsing with local album art
+- Artist bios & images from Wikipedia, album covers from Deezer — Admin → Enrich tab, images stored locally
+- Likes — heart tracks, artists, and albums; view all in Liked page
 - Playlists (create, add/remove tracks, duplicate detection)
 - Search with album cards + track results
-- Admin panel: user management, DB enrichment with live log
+- Admin panel: user management, DB music scan, DB enrichment (partial/full) with live progress
 - Multi-server playback: register any number of player servers, select from the player bar
 - ffplay singleton on each server with play/pause/seek/volume
 - Shuffle/repeat modes, volume control, progress bar with seek
-- Dark theme, Feather icons, monochrome minimal aesthetic
+- Player state persists across refresh (queue, volume, shuffle, repeat, active server)
+- Dark theme, monochrome minimal aesthetic
 - Full-screen now-playing overlay — tap album art or expand button for big view with progress, controls, and volume
 - Keyboard shortcuts — Space=play/pause, ←→=seek, N/P=next/prev, M=mute, Escape=close fullscreen
 - Shuffle/repeat mutual exclusion — enabling one disables the other

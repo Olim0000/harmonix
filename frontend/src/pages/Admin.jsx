@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import client from '../api/client';
-import Sidebar from '../components/Sidebar';
-import Player from '../components/Player';
-import { useAuthStore } from '../store/authStore';
+import PageLayout from '../components/PageLayout';
+import { useAuth } from '../store/AuthContext';
 
 const Admin = () => {
-  const currentUser = useAuthStore((s) => s.user);
+  const { user: currentUser } = useAuth();
   const [tab, setTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,6 +16,9 @@ const Admin = () => {
   // db update state
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState('');
+
+  // enrich state
+  const [enrichStatus, setEnrichStatus] = useState(null);
 
   useEffect(() => {
     if (tab !== 'users') return;
@@ -55,9 +57,10 @@ const Admin = () => {
   const handleUpdateDb = useCallback(() => {
     if (running) return;
     setRunning(true);
-    setLog('Starting enrich-music.js...\n');
+    setLog('Starting music folder scan...\n');
 
     fetch('http://localhost:3001/api/admin/update-db', {
+      method: 'POST',
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     }).then(async (response) => {
       const reader = response.body.getReader();
@@ -72,136 +75,157 @@ const Admin = () => {
     }).finally(() => setRunning(false));
   }, [running]);
 
+  const startEnrich = useCallback((mode) => {
+    client.post('/admin/enrich', { mode }).then(() => {
+      setEnrichStatus({ running: true, mode, step: 'starting...', total: 0, current: 0, enriched: [], errors: [] });
+    }).catch((err) => {
+      setEnrichStatus({ running: false, error: err.response?.data?.message || err.message });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!enrichStatus?.running) return;
+    const id = setInterval(() => {
+      client.get('/admin/enrich/status').then(r => {
+        if (!r.data.running) { clearInterval(id); }
+        setEnrichStatus(r.data);
+      }).catch(() => clearInterval(id));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [enrichStatus?.running]);
+
   return (
-    <>
-      <div className="app-shell">
-        <Sidebar />
-        <main className="content">
-          <div className="page-header">
-            <h1>Admin</h1>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-              <button
-                type="button"
-                className={tab === 'users' ? 'btn-primary' : ''}
-                onClick={() => setTab('users')}
-                style={{ background: tab === 'users' ? 'var(--accent)' : 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Users
-              </button>
-              <button
-                type="button"
-                className={tab === 'db' ? 'btn-primary' : ''}
-                onClick={() => setTab('db')}
-                style={{ background: tab === 'db' ? 'var(--accent)' : 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                Database
-              </button>
-            </div>
-          </div>
-
-          {tab === 'users' && (
-            <>
-              {error && <p className="error-text">{error}</p>}
-              {loading && <p className="loading-text">Loading users...</p>}
-              {!loading && !error && (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                      <th style={{ padding: '8px' }}>Username</th>
-                      <th style={{ padding: '8px' }}>Admin</th>
-                      <th style={{ padding: '8px' }}>Registered</th>
-                      <th style={{ padding: '8px' }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '10px 8px' }}>{u.username}</td>
-                        <td style={{ padding: '10px 8px' }}>{u.is_admin ? 'Yes' : ''}</td>
-                        <td style={{ padding: '10px 8px', color: 'var(--text-muted)' }}>{u.created_at}</td>
-                        <td style={{ padding: '10px 8px' }}>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            {Number(u.id) === Number(currentUser?.id) ? (
-                              <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>You</span>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleSetAdmin(u.id, !u.is_admin)}
-                                  style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit' }}
-                                >
-                                  {u.is_admin ? 'Remove Admin' : 'Make Admin'}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn-danger"
-                                  onClick={() => handleDelete(u.id)}
-                                  style={{ padding: '4px 10px', fontSize: '0.8rem' }}
-                                >
-                                  Delete
-                                </button>
-                              </>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => { setResetUserId(u.id); setResetPw(''); setResetError(''); }}
-                              style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit' }}
-                            >
-                              Reset PW
-                            </button>
-                            {resetUserId === u.id && (
-                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                                <input
-                                  type="text"
-                                  value={resetPw}
-                                  onChange={(e) => setResetPw(e.target.value)}
-                                  placeholder="New password"
-                                  style={{ width: '120px', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: '0.8rem' }}
-                                />
-                                <button type="button" className="btn-primary" onClick={() => handleResetPassword(u.id)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>
-                                  Save
-                                </button>
-                                {resetError && <span style={{ color: '#999', fontSize: '0.8rem' }}>{resetError}</span>}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </>
-          )}
-
-          {tab === 'db' && (
-            <div>
-              <p className="muted-copy">
-                This will scan the music folder and update the database with new tracks, metadata, and covers.
-              </p>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handleUpdateDb}
-                disabled={running}
-              >
-                {running ? 'Updating...' : 'Update Database'}
-              </button>
-              {log && (
-                <pre style={{
-                  marginTop: '16px', padding: '12px', background: '#000', color: '#ccc',
-                  borderRadius: '4px', fontSize: '0.8rem', maxHeight: '400px', overflow: 'auto',
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                }}>
-                  {log}
-                </pre>
-              )}
-            </div>
-          )}
-        </main>
+    <PageLayout>
+      <div className="page-header">
+        <h1>Admin</h1>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+          <button type="button" className={tab === 'users' ? 'btn-primary' : ''} onClick={() => setTab('users')}
+            style={{ background: tab === 'users' ? 'var(--accent)' : 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            Users
+          </button>
+          <button type="button" className={tab === 'db' ? 'btn-primary' : ''} onClick={() => setTab('db')}
+            style={{ background: tab === 'db' ? 'var(--accent)' : 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            Database
+          </button>
+          <button type="button" className={tab === 'enrich' ? 'btn-primary' : ''} onClick={() => setTab('enrich')}
+            style={{ background: tab === 'enrich' ? 'var(--accent)' : 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit' }}>
+            Enrich
+          </button>
+        </div>
       </div>
-      <Player />
-    </>
+
+      {tab === 'users' && (
+        <>
+          {error && <p className="error-text">{error}</p>}
+          {loading && <p className="loading-text">Loading users...</p>}
+          {!loading && !error && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '8px' }}>Username</th>
+                  <th style={{ padding: '8px' }}>Admin</th>
+                  <th style={{ padding: '8px' }}>Registered</th>
+                  <th style={{ padding: '8px' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '10px 8px' }}>{u.username}</td>
+                    <td style={{ padding: '10px 8px' }}>{u.is_admin ? 'Yes' : ''}</td>
+                    <td style={{ padding: '10px 8px', color: 'var(--text-muted)' }}>{u.created_at}</td>
+                    <td style={{ padding: '10px 8px' }}>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {Number(u.id) === Number(currentUser?.id) ? (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>You</span>
+                        ) : (
+                          <>
+                            <button type="button" onClick={() => handleSetAdmin(u.id, !u.is_admin)}
+                              style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit' }}>
+                              {u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                            </button>
+                            <button type="button" className="btn-danger" onClick={() => handleDelete(u.id)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>
+                              Delete
+                            </button>
+                          </>
+                        )}
+                        <button type="button" onClick={() => { setResetUserId(u.id); setResetPw(''); setResetError(''); }}
+                          style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit' }}>
+                          Reset PW
+                        </button>
+                        {resetUserId === u.id && (
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                            <input type="text" value={resetPw} onChange={(e) => setResetPw(e.target.value)} placeholder="New password"
+                              style={{ width: '120px', padding: '4px 8px', border: '1px solid var(--border)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: '0.8rem' }} />
+                            <button type="button" className="btn-primary" onClick={() => handleResetPassword(u.id)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>
+                              Save
+                            </button>
+                            {resetError && <span style={{ color: '#999', fontSize: '0.8rem' }}>{resetError}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+
+      {tab === 'db' && (
+        <div>
+          <p className="muted-copy">
+            This will scan the music folder and update the database with new tracks, metadata, and covers.
+          </p>
+          <button type="button" className="btn-primary" onClick={handleUpdateDb} disabled={running}>
+            {running ? 'Updating...' : 'Update Database'}
+          </button>
+          {log && (
+            <pre style={{ marginTop: '16px', padding: '12px', background: '#000', color: '#ccc', borderRadius: '4px', fontSize: '0.8rem', maxHeight: '400px', overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {log}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {tab === 'enrich' && (
+        <div>
+          <p className="muted-copy">
+            Fetch artist bios, artist images, and album covers from Wikipedia and Deezer.
+            Images are downloaded and stored locally. Partial mode only fills missing data.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <button type="button" className="btn-primary" onClick={() => startEnrich('partial')} disabled={enrichStatus?.running}>
+              {enrichStatus?.running && enrichStatus.mode === 'partial' ? 'Running...' : 'Partial Enrich'}
+            </button>
+            <button type="button" onClick={() => startEnrich('full')} disabled={enrichStatus?.running}
+              style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 14px', borderRadius: '4px', cursor: 'pointer', fontFamily: 'inherit' }}>
+              {enrichStatus?.running && enrichStatus.mode === 'full' ? 'Running...' : 'Full Enrich'}
+            </button>
+          </div>
+          {enrichStatus?.error && <p className="error-text">{enrichStatus.error}</p>}
+          {enrichStatus?.running && (
+            <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>
+              {enrichStatus.current}/{enrichStatus.total} — {enrichStatus.step}
+            </p>
+          )}
+          {!enrichStatus?.running && enrichStatus?.enriched?.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <p>{enrichStatus.enriched.length} items enriched.</p>
+              {enrichStatus.errors?.length > 0 && (
+                <details style={{ marginTop: '8px' }}>
+                  <summary style={{ cursor: 'pointer', color: '#999' }}>{enrichStatus.errors.length} errors</summary>
+                  <pre style={{ marginTop: '8px', padding: '12px', background: '#000', color: '#999', borderRadius: '4px', fontSize: '0.8rem', maxHeight: '200px', overflow: 'auto' }}>
+                    {enrichStatus.errors.join('\n')}
+                  </pre>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </PageLayout>
   );
 };
 

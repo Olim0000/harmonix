@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiMenu, FiX } from 'react-icons/fi';
+import { FiMenu, FiX } from '../icons';
 import client from '../api/client';
-import { useAuthStore } from '../store/authStore';
+import { useAuth } from '../store/AuthContext';
 
 const Sidebar = () => {
   const navigate = useNavigate();
-  const { logout, user } = useAuthStore();
+  const { logout, user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [playlistError, setPlaylistError] = useState('');
@@ -83,6 +83,9 @@ const Sidebar = () => {
           )}
           <li>
             <Link to="/servers" onClick={closeMenu}>Servers</Link>
+          </li>
+          <li>
+            <Link to="/liked" onClick={closeMenu}>Liked</Link>
           </li>
         </ul>
 

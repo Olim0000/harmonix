@@ -21,22 +21,5 @@ export function groupAlbums(tracks) {
 }
 
 export function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-export function albumCard(alb) {
-  return {
-    key: `${alb.artist_id}|${alb.album}`,
-    to: `/album/${alb.artist_id}/${encodeURIComponent(alb.album)}`,
-    img: alb.cover || null,
-    placeholder: alb.displayName[0],
-    title: alb.displayName,
-    subtitle: `${alb.artist} · ${alb.trackCount} track${alb.trackCount !== 1 ? 's' : ''}`,
-    year: alb.year,
-  };
+  return [...arr].sort(() => Math.random() - 0.5);
 }

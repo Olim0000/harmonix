@@ -2,6 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db').openDb();
 
+const fmt = (row) => ({
+  ...row,
+  image_url: row.image_url ? (row.image_url.startsWith('http') ? row.image_url : `/covers/${row.image_url}`) : null,
+});
+
 router.get('/', (req, res) => {
   const sql = `
     SELECT artists.*, COUNT(tracks.id) AS track_count
@@ -12,7 +17,7 @@ router.get('/', (req, res) => {
   `;
   db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ message: err.message });
-    res.json(rows);
+    res.json(rows.map(r => fmt(r)));
   });
 });
 
@@ -20,7 +25,7 @@ router.get('/:id', (req, res) => {
   db.get("SELECT * FROM artists WHERE id = ?", [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ message: err.message });
     if (!row) return res.sendStatus(404);
-    res.json(row);
+    res.json(fmt(row));
   });
 });
 

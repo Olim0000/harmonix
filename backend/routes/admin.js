@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db').openDb();
 const bcrypt = require('bcryptjs');
-const { exec } = require('child_process');
-const path = require('path');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const enricher = require('../enricher');
+const { seedMusicLibrary } = require('../db');
 
 router.use(authenticateToken, requireAdmin);
 
@@ -56,16 +56,37 @@ router.post('/users/:id/set-admin', (req, res) => {
 
 router.post('/update-db', (req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-
-  const projectRoot = path.resolve(__dirname, '..', '..');
-  const child = exec('node enrich-music.js', { cwd: projectRoot });
-
-  child.stdout.on('data', (data) => res.write(data));
-  child.stderr.on('data', (data) => res.write(data));
-
-  child.on('close', (code) => {
-    res.write(`\n--- enrich-music.js exited with code ${code} ---\n`);
+  res.write('Scanning music folder...\n');
+  seedMusicLibrary(db, (err) => {
+    if (err) {
+      res.write(`Error: ${err.message}\n`);
+      return res.end();
+    }
+    res.write('Database updated successfully.\n');
     res.end();
+  });
+});
+
+let enrichJob = null;
+
+router.post('/enrich', (req, res) => {
+  if (enrichJob?.running) return res.status(409).json({ message: 'Enrichment already running' });
+  const mode = req.body.mode === 'full' ? 'full' : 'partial';
+  enrichJob = null;
+  enricher.enrich(mode).then(job => { enrichJob = job; });
+  res.json({ message: 'Enrichment started', mode });
+});
+
+router.get('/enrich/status', (req, res) => {
+  if (!enrichJob) return res.json({ running: false });
+  res.json({
+    running: enrichJob.running,
+    mode: enrichJob.mode,
+    step: enrichJob.step,
+    total: enrichJob.total,
+    current: enrichJob.current,
+    enriched: enrichJob.enriched,
+    errors: enrichJob.errors,
   });
 });
 

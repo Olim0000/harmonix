@@ -21,6 +21,7 @@ app.use('/api/albums', require('./routes/albums'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/player', require('./routes/player'));
 app.use('/api/servers', require('./routes/servers'));
+app.use('/api/likes', require('./routes/likes'));
 
 // Serve covers directory so artist images load from backend too
 app.use('/covers', express.static(path.resolve(__dirname, '..', 'frontend', 'public', 'covers')));

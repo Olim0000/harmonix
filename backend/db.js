@@ -80,6 +80,14 @@ const createTableSql = `
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
     FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS likes (
+    user_id TEXT NOT NULL,
+    item_type TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, item_type, item_id)
+  );
 `;
 
 function findAudioFiles(dir) {
@@ -141,9 +149,28 @@ function migrateSchema(database, callback) {
       if (err) return callback(err);
 
       const hasAdmin = userCols.some((col) => col.name === 'is_admin');
-      if (hasAdmin) return callback();
+      if (hasAdmin) return afterUsers(database, callback);
 
-      database.run("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0", callback);
+      database.run("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0", (alterErr) => {
+        if (alterErr) return callback(alterErr);
+        afterUsers(database, callback);
+      });
+    });
+  });
+}
+
+function afterUsers(database, callback) {
+  database.all('PRAGMA table_info(likes)', (err, likeCols) => {
+    if (err) return callback(err);
+    const hasTrackId = likeCols.some(c => c.name === 'track_id');
+    if (!hasTrackId) return callback();
+    database.run('DROP TABLE IF EXISTS likes', (dropErr) => {
+      if (dropErr) return callback(dropErr);
+      database.run(`CREATE TABLE likes (
+        user_id TEXT NOT NULL, item_type TEXT NOT NULL,
+        item_id TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, item_type, item_id)
+      )`, callback);
     });
   });
 }
@@ -233,36 +260,6 @@ function seedMusicLibrary(database, callback) {
   });
 }
 
-function repairPlaylistTracksTable(database, callback) {
-  database.all('PRAGMA table_info(playlist_tracks)', (err, columns) => {
-    if (err) return callback(err);
-
-    const hasBadTrackId = columns.some((column) => column.name === 'track Id');
-    const hasTrackId = columns.some((column) => column.name === 'track_id');
-
-    if (!hasBadTrackId || hasTrackId) return callback();
-
-    const repairSql = `
-      PRAGMA foreign_keys = OFF;
-      CREATE TABLE playlist_tracks_fixed (
-        playlist_id INTEGER NOT NULL,
-        track_id INTEGER NOT NULL,
-        position INTEGER DEFAULT 0,
-        PRIMARY KEY (playlist_id, track_id),
-        FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
-        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
-      );
-      INSERT OR IGNORE INTO playlist_tracks_fixed (playlist_id, track_id, position)
-        SELECT playlist_id, "track Id", position FROM playlist_tracks;
-      DROP TABLE playlist_tracks;
-      ALTER TABLE playlist_tracks_fixed RENAME TO playlist_tracks;
-      PRAGMA foreign_keys = ON;
-    `;
-
-    database.exec(repairSql, callback);
-  });
-}
-
 function seedAdminUser(database, callback) {
   database.get("SELECT id FROM users WHERE is_admin = 1", (err, row) => {
     if (err) return callback(err);
@@ -283,17 +280,13 @@ function initializeDb(callback) {
     database.exec(createTableSql, (createErr) => {
       if (createErr) return callback(createErr);
 
-      repairPlaylistTracksTable(database, (repairErr) => {
-        if (repairErr) return callback(repairErr);
+      migrateSchema(database, (migrationErr) => {
+        if (migrationErr) return callback(migrationErr);
 
-        migrateSchema(database, (migrationErr) => {
-          if (migrationErr) return callback(migrationErr);
+        seedAdminUser(database, (seedErr) => {
+          if (seedErr) return callback(seedErr);
 
-          seedAdminUser(database, (seedErr) => {
-            if (seedErr) return callback(seedErr);
-
-            seedMusicLibrary(database, callback);
-          });
+          seedMusicLibrary(database, callback);
         });
       });
     });
@@ -303,4 +296,5 @@ function initializeDb(callback) {
 module.exports = { 
   openDb,
   initializeDb,
+  seedMusicLibrary,
 };
