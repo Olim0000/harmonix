@@ -2,15 +2,17 @@ const { spawnSync } = require('child_process');
 const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 const projectRoot = path.resolve(__dirname, '..');
 const dbPath = process.env.DB_PATH
-  ? path.resolve(__dirname, process.env.DB_PATH)
+  ? (process.env.DB_PATH.startsWith('~/') ? path.join(os.homedir(), process.env.DB_PATH.slice(2)) : path.resolve(__dirname, process.env.DB_PATH))
   : path.join(__dirname, 'harmonix.db');
 const musicDir = process.env.MUSIC_DIR
-  ? path.resolve(projectRoot, process.env.MUSIC_DIR)
+  ? (process.env.MUSIC_DIR.startsWith('~/') ? path.join(os.homedir(), process.env.MUSIC_DIR.slice(2)) : path.resolve(projectRoot, process.env.MUSIC_DIR))
   : path.join(projectRoot, 'music');
+console.log('Music directory:', musicDir);
 const supportedAudioExtensions = new Set(['.flac', '.mp3', '.ogg', '.m4a', '.opus']);
 const supportedCoverExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 let db;
@@ -238,12 +240,13 @@ function upsertTrack(database, track, callback) {
 }
 
 function seedMusicLibrary(database, callback) {
-  const files = findAudioFiles(musicDir);
-
   if (!fs.existsSync(musicDir)) {
     console.error(`Music directory not found: "${musicDir}". Set MUSIC_DIR in backend/.env or place audio files in music/.`);
     return callback(null);
   }
+
+  const files = findAudioFiles(musicDir);
+
   if (files.length === 0) {
     console.warn(`No audio files found in "${musicDir}". Supported formats: flac, mp3, ogg, m4a, opus. Set MUSIC_DIR in backend/.env to a different path.`);
     return callback(null);
