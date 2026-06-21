@@ -239,6 +239,16 @@ function upsertTrack(database, track, callback) {
 
 function seedMusicLibrary(database, callback) {
   const files = findAudioFiles(musicDir);
+
+  if (!fs.existsSync(musicDir)) {
+    console.error(`Music directory not found: "${musicDir}". Set MUSIC_DIR in backend/.env or place audio files in music/.`);
+    return callback(null);
+  }
+  if (files.length === 0) {
+    console.warn(`No audio files found in "${musicDir}". Supported formats: flac, mp3, ogg, m4a, opus. Set MUSIC_DIR in backend/.env to a different path.`);
+    return callback(null);
+  }
+
   let index = 0;
 
   function next(err) {
