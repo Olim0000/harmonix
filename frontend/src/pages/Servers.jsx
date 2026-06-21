@@ -4,6 +4,7 @@ import { FiTrash2, FiPlay, FiArrowLeft, FiCheckCircle, FiXCircle, FiRefreshCw } 
 import client from '../api/client';
 import { usePlayer } from '../store/PlayerContext';
 import { useAuth } from '../store/AuthContext';
+import PageLayout from '../components/PageLayout';
 
 const NATIVE_MAIN_SERVER = { id: 0, name: 'Main Server', host: window.location.hostname, port: 3001, builtin: true };
 
