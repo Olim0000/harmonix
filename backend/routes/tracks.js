@@ -74,6 +74,7 @@ router.get('/:id/stream', (req, res) => {
       res.writeHead(200, {
         'Content-Length': stat.size,
         'Content-Type': contentType,
+        'Accept-Ranges': 'bytes',
       });
       fs.createReadStream(filePath).pipe(res);
     }

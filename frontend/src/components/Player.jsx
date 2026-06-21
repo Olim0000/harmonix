@@ -71,7 +71,7 @@ const Player = () => {
   useEffect(() => {
     client.get('/servers').then((r) => {
       setServers(user?.is_admin ? [NATIVE_MAIN_SERVER, ...r.data] : r.data);
-    }).catch(() => {});
+    }).catch(e => console.error(e));
   }, [user]);
 
   useEffect(() => { if (audioRef.current) audioRef.current.volume = volume; }, [volume]);
@@ -101,8 +101,11 @@ const Player = () => {
     seek(t);
     seekGuardRef.current = performance.now() + 500;
     if (audioRef.current) audioRef.current.currentTime = t;
-    if (activeServer) seekOnServer(activeServer, t).catch(() => {});
-  }, [duration, activeServer, seek]);
+    if (activeServer) {
+      setRemoteStatus(prev => prev ? { ...prev, position: t } : { state: 'playing', position: t });
+      seekOnServer(activeServer, t).catch(e => console.error(e));
+    }
+  }, [duration, activeServer, seek, setRemoteStatus]);
 
   const doSeek = useCallback((delta) => {
     const cur = activeServer ? (remoteStatus?.position || 0) : currentTime;
@@ -110,41 +113,64 @@ const Player = () => {
     seek(t);
     seekGuardRef.current = performance.now() + 500;
     if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
+    if (activeServer) setRemoteStatus(prev => prev ? { ...prev, position: t } : { state: 'playing', position: t });
     seekTimerRef.current = setTimeout(() => {
       if (audioRef.current) audioRef.current.currentTime = t;
-      if (activeServer) seekOnServer(activeServer, t).catch(() => {});
+      if (activeServer) seekOnServer(activeServer, t).catch(e => console.error(e));
     }, 300);
-  }, [duration, activeServer, currentTime, remoteStatus, seek]);
+  }, [duration, activeServer, currentTime, remoteStatus, seek, setRemoteStatus]);
 
   const handleEnded = useCallback(() => {
     if (repeat) {
       seek(0);
-      if (audioRef.current) { audioRef.current.currentTime = 0; audioRef.current.play().catch(() => {}); }
+      if (audioRef.current) { audioRef.current.currentTime = 0; audioRef.current.play().catch(e => console.error(e)); }
     } else next();
   }, [repeat, next, seek]);
+
+  const handlePlayPause = useCallback(() => {
+    if (playing) {
+      pause();
+      if (activeServer && currentTrack) pauseOnServer(activeServer).catch(e => console.error(e));
+    } else {
+      play();
+      if (activeServer && currentTrack) {
+        if (lastTrackIdRef.current === currentTrack.id) {
+          resumeOnServer(activeServer).catch(e => console.error(e));
+        } else {
+          lastTrackIdRef.current = currentTrack.id;
+          playOnServer(activeServer, {
+            streamUrl: currentTrack.stream_url,
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            coverUrl: currentTrack.cover,
+          }).catch(e => console.error(e));
+        }
+      }
+    }
+  }, [playing, activeServer, currentTrack, pause, play]);
 
   const toggleMute = useCallback(() => {
     const newVol = volume > 0 ? 0 : 1;
     setVolume(newVol);
-    if (activeServer) setVolumeOnServer(activeServer, Math.round(newVol * 100)).catch(() => {});
+    if (activeServer) setVolumeOnServer(activeServer, Math.round(newVol * 100)).catch(e => console.error(e));
   }, [volume, setVolume, activeServer]);
 
   const handleVolumeChange = useCallback((e) => {
     const val = parseFloat(e.target.value);
     setVolume(val);
-    if (activeServer) setVolumeOnServer(activeServer, Math.round(val * 100)).catch(() => {});
+    if (activeServer) setVolumeOnServer(activeServer, Math.round(val * 100)).catch(e => console.error(e));
   }, [setVolume, activeServer]);
 
   const handleServerChange = useCallback((e) => {
     const val = e.target.value;
-    if (!val) { if (activeServer) stopOnServer(activeServer).catch(() => {}); setActiveServer(null); pause(); return; }
+    if (!val) { if (activeServer) stopOnServer(activeServer).catch(e => console.error(e)); setActiveServer(null); pause(); return; }
     setActiveServer(JSON.parse(val));
   }, [activeServer, setActiveServer, pause]);
 
   useEffect(() => {
     if (prevServerRef.current && prevServerRef.current !== activeServer) {
       if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
-      stopOnServer(prevServerRef.current).catch(() => {});
+      stopOnServer(prevServerRef.current).catch(e => console.error(e));
       lastTrackIdRef.current = null;
       prevStateRef.current = null;
     }
@@ -153,13 +179,13 @@ const Player = () => {
 
   useEffect(() => {
     if (!activeServer) { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setRemoteStatus(null); return; }
-    if (!playing) { if (currentTrack && lastTrackIdRef.current === currentTrack.id) pauseOnServer(activeServer).catch(() => {}); return; }
+    if (!playing) { if (currentTrack && lastTrackIdRef.current === currentTrack.id) pauseOnServer(activeServer).catch(e => console.error(e)); return; }
     if (!currentTrack) return;
     if (lastTrackIdRef.current === currentTrack.id) {
-      resumeOnServer(activeServer).catch(() => {});
+      resumeOnServer(activeServer).catch(e => console.error(e));
     } else {
       lastTrackIdRef.current = currentTrack.id;
-      playOnServer(activeServer, { streamUrl: currentTrack.stream_url, title: currentTrack.title, artist: currentTrack.artist, coverUrl: currentTrack.cover }).catch(() => {});
+      playOnServer(activeServer, { streamUrl: currentTrack.stream_url, title: currentTrack.title, artist: currentTrack.artist, coverUrl: currentTrack.cover }).catch(e => console.error(e));
     }
   }, [playing, currentTrack, activeServer, setRemoteStatus]);
 
@@ -171,9 +197,9 @@ const Player = () => {
         setRemoteStatus(status);
         if (status.position != null) setCurrentTime(status.position);
         if (currentTrack?.duration_seconds) setDuration(currentTrack.duration_seconds);
-        if (prevStateRef.current === 'playing' && status.state === 'stopped') next();
+        if (prevStateRef.current === 'playing' && status.state === 'stopped') { lastTrackIdRef.current = null; next(); }
         prevStateRef.current = status.state;
-      } catch {}
+      } catch (e) { console.error(e) }
     };
     doPoll();
     pollRef.current = setInterval(doPoll, 2000);
@@ -220,7 +246,7 @@ const Player = () => {
 
         <div className="player-center">
           <PlayerControls playing={playing} shuffle={shuffle} repeat={repeat} currentTrack={currentTrack}
-            onPlayPause={() => (playing ? pause() : play())} onPrevious={previous} onNext={next}
+            onPlayPause={handlePlayPause} onPrevious={previous} onNext={next}
             onToggleShuffle={toggleShuffle} onToggleRepeat={toggleRepeat} size={16} />
           <PlayerProgress pct={progressPct} time={displayTime} dur={duration} onSeek={handleProgressClick} />
         </div>
@@ -283,7 +309,7 @@ const Player = () => {
           </div>
           <PlayerProgress pct={progressPct} time={displayTime} dur={duration} fs onSeek={handleProgressClick} />
           <PlayerControls playing={playing} shuffle={shuffle} repeat={repeat} currentTrack={currentTrack}
-            onPlayPause={() => (playing ? pause() : play())} onPrevious={previous} onNext={next}
+            onPlayPause={handlePlayPause} onPrevious={previous} onNext={next}
             onToggleShuffle={toggleShuffle} onToggleRepeat={toggleRepeat} size={20} />
           <PlayerVolume volume={volume} onToggleMute={toggleMute} onChange={handleVolumeChange} className="player-fullscreen-volume" compact />
         </div>

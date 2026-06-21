@@ -1,3 +1,4 @@
+const { spawnSync } = require('child_process');
 const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const path = require('path');
@@ -136,6 +137,19 @@ function findCoverForTrack(filePath) {
   return cover ? path.join(dir, cover.name) : null;
 }
 
+function getAudioDuration(filePath) {
+  try {
+    const result = spawnSync('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
+    ], { timeout: 5000, encoding: 'utf-8' });
+    if (result.status !== 0 || !result.stdout) return null;
+    return Math.round(parseFloat(result.stdout.trim()));
+  } catch {
+    return null;
+  }
+}
+
 function migrateSchema(database, callback) {
   database.all('PRAGMA table_info(tracks)', (err, columns) => {
     if (err) return callback(err);
@@ -203,21 +217,21 @@ function getOrCreateArtist(database, name, callback) {
 }
 
 function upsertTrack(database, track, callback) {
-  database.get('SELECT id FROM tracks WHERE file_path = ?', [track.file_path], (err, existingTrack) => {
+  database.get('SELECT id, duration_seconds FROM tracks WHERE file_path = ?', [track.file_path], (err, existingTrack) => {
     if (err) return callback(err);
 
     if (existingTrack) {
-      database.run(
-        'UPDATE tracks SET title = ?, artist_id = ?, album = ?, cover_url = ? WHERE id = ?',
-        [track.title, track.artist_id, track.album, track.cover_url, existingTrack.id],
-        callback
-      );
+      if (track.duration_seconds && !existingTrack.duration_seconds) {
+        database.run('UPDATE tracks SET duration_seconds = ? WHERE id = ?', [track.duration_seconds, existingTrack.id], callback);
+      } else {
+        callback();
+      }
       return;
     }
 
     database.run(
       'INSERT INTO tracks (title, artist_id, album, duration_seconds, file_path, cover_url) VALUES (?, ?, ?, ?, ?, ?)',
-      [track.title, track.artist_id, track.album, null, track.file_path, track.cover_url],
+      [track.title, track.artist_id, track.album, track.duration_seconds ?? null, track.file_path, track.cover_url],
       callback
     );
   });
@@ -240,6 +254,7 @@ function seedMusicLibrary(database, callback) {
     const folder = path.basename(path.dirname(filePath));
     const albumInfo = parseAlbumFolder(folder);
     const coverPath = findCoverForTrack(filePath);
+    const durationSeconds = getAudioDuration(filePath);
 
     getOrCreateArtist(database, albumInfo.artist, (artistErr, artistId) => {
       if (artistErr) return callback(artistErr);
@@ -250,6 +265,7 @@ function seedMusicLibrary(database, callback) {
         album: albumInfo.album,
         file_path: filePath,
         cover_url: coverPath,
+        duration_seconds: durationSeconds,
       }, next);
     });
   }

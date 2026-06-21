@@ -26,14 +26,22 @@ class Player extends EventEmitter {
     this.coverUrl = coverUrl || '';
 
     const args = ['-nodisp', '-autoexit', '-loglevel', 'quiet', streamUrl];
-    this.process = spawn('ffplay', args, { stdio: 'ignore' });
+    let proc;
+    try {
+      proc = spawn('ffplay', args, { stdio: 'ignore' });
+    } catch {
+      this.state = 'stopped';
+      return;
+    }
+    this.process = proc;
     this.state = 'playing';
     this.position = 0;
     this.seekOffset = 0;
     this.startTime = Date.now();
     this._startTick();
 
-    this.process.on('exit', (code) => {
+    proc.on('exit', (code) => {
+      if (this.process !== proc) return;
       this._stopTick();
       this.state = 'stopped';
       this.emit('trackEnd', { code });
@@ -86,7 +94,15 @@ class Player extends EventEmitter {
     this._stopTick();
 
     const args = ['-nodisp', '-autoexit', '-loglevel', 'quiet', '-ss', String(position), this.streamUrl];
-    this.process = spawn('ffplay', args, { stdio: 'ignore' });
+    let proc;
+    try {
+      proc = spawn('ffplay', args, { stdio: 'ignore' });
+    } catch {
+      this.process = null;
+      this.state = 'stopped';
+      return;
+    }
+    this.process = proc;
 
     this.position = position;
     this.seekOffset = position;
@@ -107,7 +123,8 @@ class Player extends EventEmitter {
       this._startTick();
     }
 
-    this.process.on('exit', (code) => {
+    proc.on('exit', (code) => {
+      if (this.process !== proc) return;
       this._stopTick();
       this.state = 'stopped';
       this.emit('trackEnd', { code });

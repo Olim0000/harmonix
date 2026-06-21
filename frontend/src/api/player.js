@@ -21,15 +21,15 @@ export function playOnServer(server, { streamUrl, title, artist, coverUrl }) {
 }
 
 export function pauseOnServer(server) {
-  return request(server, 'pause');
+  return request(server, 'pause', {});
 }
 
 export function resumeOnServer(server) {
-  return request(server, 'resume');
+  return request(server, 'resume', {});
 }
 
 export function stopOnServer(server) {
-  return request(server, 'stop');
+  return request(server, 'stop', {});
 }
 
 export function seekOnServer(server, position) {
