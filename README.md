@@ -12,6 +12,10 @@ Multi-server remote playback: browse your music library from a source server, ro
 ## Quick start
 
 ```bash
+# both at once
+./start.sh
+
+# or separately:
 # backend (source + player servers)
 cd backend && node server.js
 
