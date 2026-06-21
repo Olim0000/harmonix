@@ -56,6 +56,7 @@ const Player = () => {
   const seekGuardRef = useRef(0);
   const [fullScreen, setFullScreen] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
+  const restoredRef = useRef(false);
 
   const {
     playing, currentTrack, volume, shuffle, repeat, currentTime, duration,
@@ -83,6 +84,19 @@ const Player = () => {
     if (playing && currentTrack) el.play().catch(() => pause());
     else el.pause();
   }, [playing, currentTrack, pause, activeServer]);
+
+  useEffect(() => {
+    if (activeServer || restoredRef.current || !currentTrack || !audioRef.current) return;
+    const savedTime = currentTime;
+    if (savedTime > 0 && savedTime < (duration || Infinity)) {
+      audioRef.current.currentTime = savedTime;
+      restoredRef.current = true;
+    }
+  }, [activeServer, currentTrack, currentTime, duration]);
+
+  useEffect(() => {
+    restoredRef.current = false;
+  }, [currentTrack?.id]);
 
   const handleTimeUpdate = useCallback(() => {
     if (performance.now() < seekGuardRef.current) return;

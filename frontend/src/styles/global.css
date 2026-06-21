@@ -1,26 +1,37 @@
 :root {
-  --bg-primary: #121212;
-  --bg-secondary: #1a1a1a;
-  --bg-surface: #282828;
-  --accent: #e0e0e0;
-  --accent-hover: #ffffff;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-surface: #111111;
+  --accent: #24BB71;
+  --accent-hover: #3dd488;
   --text: #ffffff;
-  --text-muted: #b3b3b3;
-  --border: #333;
+  --text-muted: #666666;
+  --border: #222222;
   --player-height: 80px;
   --sidebar-width: 220px;
 }
 
 * {
   box-sizing: border-box;
+  border-radius: 0 !important;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'VT323', 'Courier New', monospace;
   margin: 0;
   padding: 0;
   background-color: var(--bg-primary);
   color: var(--text);
+  font-size: 1.1rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Press Start 2P', monospace;
+  letter-spacing: 0.02em;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
 }
 
 #root {
@@ -45,8 +56,8 @@ body {
 }
 
 .sidebar-brand {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.7rem;
   color: var(--accent);
   margin-bottom: 24px;
 }
@@ -65,15 +76,16 @@ body {
 .sidebar a {
   color: var(--text-muted);
   text-decoration: none;
-  padding: 8px 12px;
+  padding: 8px 12px 8px 12px;
   display: block;
-  border-radius: 4px;
   font-size: 0.9rem;
+  border-left: 3px solid transparent;
 }
 
 .sidebar a:hover {
   color: var(--text);
-  background: var(--bg-surface);
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
 }
 
 .sidebar-footer {
@@ -101,7 +113,7 @@ body {
 
 .sidebar-footer button:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  border-color: var(--accent);
 }
 
 .content {
@@ -116,7 +128,7 @@ body {
 
 .page-header h1 {
   margin: 0 0 4px;
-  font-size: 1.75rem;
+  font-size: 0.95rem;
 }
 
 .page-header p {
@@ -152,7 +164,7 @@ body {
 }
 
 .track-row.active {
-  background: var(--bg-surface);
+  background: rgba(36, 187, 113, 0.12);
   color: var(--accent);
 }
 
@@ -293,6 +305,7 @@ body {
 .player-btn-play:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
   background: none;
 }
 
@@ -316,8 +329,7 @@ body {
 
 .player-progress-fill {
   height: 100%;
-  background: var(--text);
-  border-radius: 2px;
+  background: var(--accent);
   transition: width 0.1s linear;
   position: absolute;
   top: 0;
@@ -325,7 +337,7 @@ body {
 }
 
 .player-progress:hover .player-progress-fill {
-  background: var(--accent);
+  background: var(--accent-hover);
 }
 
 .player-progress-thumb {
@@ -408,7 +420,6 @@ body {
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--border);
-  border-radius: 20px;
   background: var(--bg-surface);
   color: var(--text);
   font-size: 0.95rem;
@@ -484,6 +495,7 @@ body {
 
 .btn-primary:hover {
   background: var(--accent-hover);
+  box-shadow: 0 0 10px var(--accent);
 }
 
 .btn-primary:disabled {
@@ -862,7 +874,7 @@ body {
 }
 
 .player-queue-item.active {
-  background: rgba(255,255,255,0.05);
+  background: rgba(36, 187, 113, 0.15);
 }
 
 .player-queue-item.active .player-queue-item-title {
@@ -1009,16 +1021,15 @@ body {
 }
 
 .servers-table .active-row {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(36, 187, 113, 0.15);
 }
 
 .active-badge {
   display: inline-block;
   font-size: 0.65rem;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(36, 187, 113, 0.3);
   padding: 2px 6px;
-  border-radius: 3px;
   margin-left: 8px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1194,8 +1205,7 @@ body {
 
 .player-fullscreen-progress-fill {
   height: 100%;
-  background: var(--text);
-  border-radius: 3px;
+  background: var(--accent);
   transition: width 0.1s linear;
   position: absolute;
   top: 0;
@@ -1203,7 +1213,7 @@ body {
 }
 
 .player-fullscreen-progress:hover .player-fullscreen-progress-fill {
-  background: var(--accent);
+  background: var(--accent-hover);
 }
 
 .player-fullscreen-progress-thumb {

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 import TrackRow from '../components/TrackRow';
 import { groupAlbums, shuffle } from '../utils/albums';
 import { usePlayer } from '../store/PlayerContext';
@@ -68,7 +67,7 @@ const Search = () => {
   }, [term, tracks]);
 
   return (
-    <PageLayout>
+    <>
       <div className="page-header">
         <h1>Search</h1>
         <p>{totalResults} results</p>
@@ -168,7 +167,7 @@ const Search = () => {
           {matchingTracks.map((track) => <TrackRow key={track.id} track={track} />)}
         </div>
       )}
-    </PageLayout>
+    </>
   );
 };
 

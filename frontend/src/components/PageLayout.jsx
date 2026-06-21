@@ -1,13 +1,14 @@
 import React from 'react';
+import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Player from './Player';
 
-const PageLayout = ({ children }) => (
+const PageLayout = () => (
   <>
     <div className="app-shell">
       <Sidebar />
       <main className="content">
-        {children}
+        <Outlet />
       </main>
     </div>
     <Player />

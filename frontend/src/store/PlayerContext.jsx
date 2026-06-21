@@ -99,13 +99,13 @@ function loadSaved() {
 export function PlayerProvider({ children }) {
   const [state, dispatch] = useReducer(playerReducer, initialState, (initial) => {
     const saved = loadSaved();
-    // ponytail: discard ephemeral fields — no autoplay, no stale position
-    return saved ? { ...initial, ...saved, playing: false, currentTime: 0, duration: 0, remoteStatus: null } : initial;
+    // ponytail: discard ephemeral fields — no autoplay, no stale remote status
+    return saved ? { ...initial, ...saved, playing: false, duration: 0, remoteStatus: null } : initial;
   });
 
   useEffect(() => {
     // ponytail: no debounce, localStorage sync is fast enough for a personal music app
-    const { currentTime, duration, remoteStatus, playing, ...persist } = state;
+    const { duration, remoteStatus, playing, ...persist } = state;
     localStorage.setItem('harmonix_player', JSON.stringify(persist));
   }, [state]);
 

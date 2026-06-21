@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 import TrackRow from '../components/TrackRow';
 import { usePlayer } from '../store/PlayerContext';
 const Playlist = () => {
@@ -61,7 +60,7 @@ const Playlist = () => {
   }, [id, navigate, deleting]);
 
   return (
-    <PageLayout>
+    <>
       <div className="page-header">
         <h1>{playlist?.name || 'Playlist'}</h1>
         <p>{tracks.length} tracks</p>
@@ -93,7 +92,7 @@ const Playlist = () => {
           </div>
         ))}
       </div>
-    </PageLayout>
+    </>
   );
 };
 

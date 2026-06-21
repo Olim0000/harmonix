@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 
 const formatDuration = (seconds) => {
   if (!seconds) return '0 min';
@@ -51,39 +50,37 @@ const Playlists = () => {
 
   return (
     <>
-      <PageLayout>
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <div>
-            <h1>Playlists</h1>
-            <p>{playlists.length} playlist{playlists.length !== 1 ? 's' : ''}</p>
-          </div>
-          <button type="button" className="btn-primary" onClick={() => setShowCreate(true)}>
-            New Playlist
-          </button>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div>
+          <h1>Playlists</h1>
+          <p>{playlists.length} playlist{playlists.length !== 1 ? 's' : ''}</p>
         </div>
-        {loading && <p className="loading-text">Loading playlists...</p>}
-        {error && <p className="error-text">{error}</p>}
-        {!loading && !error && (
-          <>
-            <input type="text" className="search-input" placeholder="Search playlists..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            <div className="artists-grid">
-              {filtered.map((pl) => (
-                <Link key={pl.id} to={`/playlist/${pl.id}`} className="artist-card">
-                  <div className="artist-card-placeholder" style={{ fontSize: '1.8rem' }}>♪</div>
-                  <div className="artist-card-name">{pl.name}</div>
-                  <div className="artist-card-count">{pl.track_count} track{pl.track_count !== 1 ? 's' : ''}</div>
-                  <div className="artist-card-count" style={{ fontSize: '0.75rem' }}>{formatDuration(pl.total_duration)}</div>
-                </Link>
-              ))}
-              {filtered.length === 0 && (
-                <p className="muted-copy" style={{ gridColumn: '1 / -1' }}>
-                  {search ? 'No playlists match your search.' : 'No playlists yet. Create one to get started.'}
-                </p>
-              )}
-            </div>
-          </>
-        )}
-      </PageLayout>
+        <button type="button" className="btn-primary" onClick={() => setShowCreate(true)}>
+          New Playlist
+        </button>
+      </div>
+      {loading && <p className="loading-text">Loading playlists...</p>}
+      {error && <p className="error-text">{error}</p>}
+      {!loading && !error && (
+        <>
+          <input type="text" className="search-input" placeholder="Search playlists..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="artists-grid">
+            {filtered.map((pl) => (
+              <Link key={pl.id} to={`/playlist/${pl.id}`} className="artist-card">
+                <div className="artist-card-placeholder" style={{ fontSize: '1.8rem' }}>♪</div>
+                <div className="artist-card-name">{pl.name}</div>
+                <div className="artist-card-count">{pl.track_count} track{pl.track_count !== 1 ? 's' : ''}</div>
+                <div className="artist-card-count" style={{ fontSize: '0.75rem' }}>{formatDuration(pl.total_duration)}</div>
+              </Link>
+            ))}
+            {filtered.length === 0 && (
+              <p className="muted-copy" style={{ gridColumn: '1 / -1' }}>
+                {search ? 'No playlists match your search.' : 'No playlists yet. Create one to get started.'}
+              </p>
+            )}
+          </div>
+        </>
+      )}
 
       {showCreate && (
         <div className="modal-overlay" onClick={() => setShowCreate(false)}>

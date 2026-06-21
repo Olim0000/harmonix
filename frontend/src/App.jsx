@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import PageLayout from './components/PageLayout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
@@ -21,17 +22,19 @@ const App = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/search" element={<Search />} />
-        <Route path="/library" element={<Library />} />
-        <Route path="/artists" element={<Artists />} />
-        <Route path="/playlists" element={<Playlists />} />
-        <Route path="/playlist/:id" element={<Playlist />} />
-        <Route path="/liked" element={<Liked />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/servers" element={<Servers />} />
-        <Route path="/artist/:id" element={<ArtistPage />} />
-        <Route path="/album/:artistId/:albumName" element={<AlbumPage />} />
+        <Route element={<PageLayout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/search" element={<Search />} />
+          <Route path="/library" element={<Library />} />
+          <Route path="/artists" element={<Artists />} />
+          <Route path="/playlists" element={<Playlists />} />
+          <Route path="/playlist/:id" element={<Playlist />} />
+          <Route path="/liked" element={<Liked />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/servers" element={<Servers />} />
+          <Route path="/artist/:id" element={<ArtistPage />} />
+          <Route path="/album/:artistId/:albumName" element={<AlbumPage />} />
+        </Route>
       </Route>
     </Routes>
   );

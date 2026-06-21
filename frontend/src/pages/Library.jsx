@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 import { groupAlbums } from '../utils/albums';
 import { usePlayer } from '../store/PlayerContext';
 import { FiPlay } from '../icons';
@@ -34,7 +33,7 @@ const Library = () => {
   }, [tracks]);
 
   return (
-    <PageLayout>
+    <>
       <div className="page-header">
         <h1>Library</h1>
         <p>{albums.length} album{albums.length !== 1 ? 's' : ''}</p>
@@ -66,7 +65,7 @@ const Library = () => {
           ))}
         </div>
       )}
-    </PageLayout>
+    </>
   );
 };
 

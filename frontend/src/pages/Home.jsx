@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 import { groupAlbums, shuffle } from '../utils/albums';
 import { usePlayer } from '../store/PlayerContext';
 import { FiPlay } from '../icons';
@@ -33,7 +32,7 @@ const Home = () => {
   }, [tracks]);
 
   return (
-    <PageLayout>
+    <>
       <div className="page-header">
         <h1>Harmonix</h1>
         <p>{tracks.length ? `${tracks.length} tracks ready` : 'Loading your music'}</p>
@@ -65,7 +64,7 @@ const Home = () => {
           ))}
         </div>
       )}
-    </PageLayout>
+    </>
   );
 };
 

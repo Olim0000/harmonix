@@ -4,7 +4,6 @@ import { FiTrash2, FiPlay, FiArrowLeft, FiCheckCircle, FiXCircle, FiRefreshCw } 
 import client from '../api/client';
 import { usePlayer } from '../store/PlayerContext';
 import { useAuth } from '../store/AuthContext';
-import PageLayout from '../components/PageLayout';
 
 const NATIVE_MAIN_SERVER = { id: 0, name: 'Main Server', host: window.location.hostname, port: 3001, builtin: true };
 
@@ -86,7 +85,7 @@ const Servers = () => {
   }, []);
 
   return (
-    <PageLayout>
+    <>
       <Link to="/" className="back-link"><FiArrowLeft size={16} /> Back to Home</Link>
 
       <div className="page-header">
@@ -178,7 +177,7 @@ const Servers = () => {
           </table>
         )}
       </div>
-    </PageLayout>
+    </>
   );
 };
 

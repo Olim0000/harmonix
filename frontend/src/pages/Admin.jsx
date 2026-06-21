@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 import { useAuth } from '../store/AuthContext';
 
 const Admin = () => {
@@ -95,7 +94,7 @@ const Admin = () => {
   }, [enrichStatus?.running]);
 
   return (
-    <PageLayout>
+    <>
       <div className="page-header">
         <h1>Admin</h1>
         <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
@@ -225,7 +224,7 @@ const Admin = () => {
           )}
         </div>
       )}
-    </PageLayout>
+    </>
   );
 };
 

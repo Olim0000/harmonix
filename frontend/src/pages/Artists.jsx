@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client';
-import PageLayout from '../components/PageLayout';
 
 const Artists = () => {
   const [artists, setArtists] = useState([]);
@@ -17,7 +16,7 @@ const Artists = () => {
   }, []);
 
   return (
-    <PageLayout>
+    <>
       <div className="page-header">
         <h1>Artists</h1>
         <p>{artists.length} artists</p>
@@ -37,7 +36,7 @@ const Artists = () => {
           </Link>
         ))}
       </div>
-    </PageLayout>
+    </>
   );
 };
 
