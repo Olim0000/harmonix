@@ -31,6 +31,7 @@ cd frontend && npm run dev
 - **Servers** are per-user (`servers.user_id`). CRUD scoped to `req.user.id`. No admin-only restriction on the API itself — each user manages their own servers.
 - **Native Main Server** (localhost:3001) is frontend-only for admin: prepended as `id:0, builtin:true` in Servers page + Player dropdown. Not stored in DB. No delete button. Regular users don't see it.
 - **Player component** (`Player.jsx`): three modes — Browser (`<audio>` element), Main Server (ffplay, admin only), Remote Server (ffplay). 2s polling for remote status. Full-screen overlay with controls + progress. Keyboard shortcuts: Space=play/pause, ←→=seek ±5s, N=next, P=previous, M=mute, Escape=close fullscreen.
+- **Audio element always mounted**: The `<audio>` element is always in the DOM (hidden via `display: none` in server mode) so `onLoadedMetadata` sets `duration` from the actual audio file. This is a fallback when `duration_seconds` is `null` in the DB (ffprobe may fail). Only `onTimeUpdate` and `onEnded` are mode-gated to browser-only.
 - **Mobile responsive** — `global.css` has `@media (max-width: 768px)` breakpoint. Sidebar becomes slide-out drawer. `.hide-mobile` utility class. Servers table hides Port + Status columns on mobile.
 
 ## State management
@@ -85,3 +86,5 @@ Every page shell: `<PageLayout>` wraps `<Sidebar /> | <main>content</main> | <Pl
 - Native Main Server (id=0, builtin) is a frontend construct — not in the DB.
 - JWT is shared via `JWT_SECRET` across all servers. `authenticateToken` only verifies the signature (no DB query), so player servers can validate tokens without having users in their DB.
 - On mobile (<768px), `.content` uses `padding-left: 48px` to keep page titles from being hidden behind the fixed hamburger toggle.
+- **Duration (`duration_seconds`) may be `null`** — ffprobe may fail on some files during scan. The frontend falls back to the hidden `<audio>` element's `onLoadedMetadata` to get the actual duration from the file headers. Progress bar height is 8px (12px fullscreen) for clickable area.
+- **Seek position update** uses `{ ...remoteStatus, position: t }` instead of a functional callback `prev => ...`. The spread works with `null`, a function, or a real object, avoiding a bug where the callback function was stored as the `remoteStatus` state value.

@@ -116,7 +116,7 @@ const Player = () => {
     seekGuardRef.current = performance.now() + 500;
     if (audioRef.current) audioRef.current.currentTime = t;
     if (activeServer) {
-      setRemoteStatus(prev => prev ? { ...prev, position: t } : { state: 'playing', position: t });
+      setRemoteStatus({ ...remoteStatus, position: t });
       seekOnServer(activeServer, t).catch(e => console.error(e));
     }
   }, [duration, activeServer, seek, setRemoteStatus]);
@@ -127,7 +127,7 @@ const Player = () => {
     seek(t);
     seekGuardRef.current = performance.now() + 500;
     if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
-    if (activeServer) setRemoteStatus(prev => prev ? { ...prev, position: t } : { state: 'playing', position: t });
+    if (activeServer) setRemoteStatus({ ...remoteStatus, position: t });
     seekTimerRef.current = setTimeout(() => {
       if (audioRef.current) audioRef.current.currentTime = t;
       if (activeServer) seekOnServer(activeServer, t).catch(e => console.error(e));
@@ -205,12 +205,12 @@ const Player = () => {
 
   useEffect(() => {
     if (!activeServer || !playing) { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } return; }
+    if (currentTrack?.duration_seconds) setDuration(currentTrack.duration_seconds);
     const doPoll = async () => {
       try {
         const status = await getServerStatus(activeServer);
         setRemoteStatus(status);
         if (status.position != null) setCurrentTime(status.position);
-        if (currentTrack?.duration_seconds) setDuration(currentTrack.duration_seconds);
         if (prevStateRef.current === 'playing' && status.state === 'stopped') { lastTrackIdRef.current = null; next(); }
         prevStateRef.current = status.state;
       } catch (e) { console.error(e) }
@@ -279,7 +279,7 @@ const Player = () => {
           </select>
         </div>
 
-        {!activeServer && <audio ref={audioRef} src={currentTrack?.stream_url || ''} onTimeUpdate={handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onEnded={handleEnded} />}
+        <audio ref={audioRef} src={currentTrack?.stream_url || ''} onTimeUpdate={activeServer ? undefined : handleTimeUpdate} onLoadedMetadata={handleLoadedMetadata} onEnded={activeServer ? undefined : handleEnded} style={activeServer ? { display: 'none' } : undefined} />
       </div>
 
       {showQueue && (

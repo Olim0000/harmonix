@@ -43,6 +43,7 @@ cd frontend && npm run dev
 - Full-screen now-playing overlay — tap album art or expand button for big view with progress, controls, and volume
 - Keyboard shortcuts — Space=play/pause, ←→=seek, N/P=next/prev, M=mute, Escape=close fullscreen
 - Shuffle/repeat mutual exclusion — enabling one disables the other
+- Duration extracted from audio file headers via `<audio>` element even in server mode (hidden element) — fallback when ffprobe scan didn't populate `duration_seconds`
 - Mobile responsive — sidebar slide-out drawer, compact player, adaptive cards/tables on phones
 
 ## Permissions
