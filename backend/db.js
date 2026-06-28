@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const mm = require('music-metadata');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -65,6 +66,11 @@ const createTableSql = `
     cover_url TEXT,
     file_mtime INTEGER,
     file_size INTEGER,
+    genre TEXT,
+    year INTEGER,
+    track_number INTEGER,
+    disc_number INTEGER,
+    composer TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (artist_id) REFERENCES artists(id)
   );
@@ -180,6 +186,61 @@ function copyCoverToCovers(sourcePath, artistId, album) {
   }
 }
 
+// Save embedded cover art from audio tags to covers/
+async function saveCoverFromBuffer(picture, filePath) {
+  if (!picture || !picture.data) return null;
+  ensureCoversDir();
+  const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[picture.format] || '.jpg';
+  const hash = crypto.createHash('md5').update(filePath).digest('hex').slice(0, 12);
+  const name = `cover_${hash}${ext}`;
+  const destPath = path.join(coversDir, name);
+  if (!fs.existsSync(destPath)) {
+    try { fs.writeFileSync(destPath, Buffer.from(picture.data)); } catch { return null; }
+  }
+  return `covers/${name}`;
+}
+
+// Read metadata from audio file; fallback to folder/filename parsing
+async function scanFile(filePath) {
+  try {
+    const meta = await mm.parseFile(filePath, { duration: false });
+    const c = meta.common;
+    let coverUrl = null;
+    if (c.picture?.[0]) coverUrl = await saveCoverFromBuffer(c.picture[0], filePath);
+    return {
+      title: c.title || parseTrackTitle(filePath),
+      artist: c.artist || 'Unknown Artist',
+      album: c.album || path.basename(path.dirname(filePath)),
+      year: c.year || null,
+      genre: c.genre?.[0] || null,
+      track_number: c.track?.no || null,
+      disc_number: c.disk?.no || null,
+      composer: c.composer?.[0] || null,
+      duration: meta.format.duration ? Math.round(meta.format.duration) : null,
+      cover_url: coverUrl,
+    };
+  } catch {
+    return fallbackParse(filePath);
+  }
+}
+
+function fallbackParse(filePath) {
+  const folder = path.basename(path.dirname(filePath));
+  const albumInfo = parseAlbumFolder(folder);
+  return {
+    title: parseTrackTitle(filePath),
+    artist: albumInfo.artist,
+    album: albumInfo.album,
+    year: null,
+    genre: null,
+    track_number: null,
+    disc_number: null,
+    composer: null,
+    duration: getAudioDuration(filePath),
+    cover_url: null,
+  };
+}
+
 // ── Schema migrations ──────────────────────────────────────────────
 
 function migrateSchema(database, callback) {
@@ -191,6 +252,11 @@ function migrateSchema(database, callback) {
     if (!cols.includes('album')) stmts.push('ALTER TABLE tracks ADD COLUMN album TEXT');
     if (!cols.includes('file_mtime')) stmts.push('ALTER TABLE tracks ADD COLUMN file_mtime INTEGER');
     if (!cols.includes('file_size')) stmts.push('ALTER TABLE tracks ADD COLUMN file_size INTEGER');
+    if (!cols.includes('genre')) stmts.push('ALTER TABLE tracks ADD COLUMN genre TEXT');
+    if (!cols.includes('year')) stmts.push('ALTER TABLE tracks ADD COLUMN year INTEGER');
+    if (!cols.includes('track_number')) stmts.push('ALTER TABLE tracks ADD COLUMN track_number INTEGER');
+    if (!cols.includes('disc_number')) stmts.push('ALTER TABLE tracks ADD COLUMN disc_number INTEGER');
+    if (!cols.includes('composer')) stmts.push('ALTER TABLE tracks ADD COLUMN composer TEXT');
 
     database.all('PRAGMA table_info(users)', (err, userCols) => {
       if (err) return callback(err);
@@ -306,86 +372,95 @@ function upsertTrack(database, track, callback) {
     if (err) return callback(err);
 
     if (existing) {
-      // File unchanged → skip unless we need to fill in duration
       if (track.file_mtime !== undefined && track.file_mtime === existing.file_mtime) {
-        if (track.duration_seconds && !existing.duration_seconds) {
-          database.run('UPDATE tracks SET duration_seconds = ? WHERE id = ?', [track.duration_seconds, existing.id], callback);
+        if (track.duration && !existing.duration_seconds) {
+          database.run('UPDATE tracks SET duration_seconds = ? WHERE id = ?', [track.duration, existing.id], callback);
         } else {
           callback();
         }
         return;
       }
-      // File changed → update
       database.run(
-        'UPDATE tracks SET title = ?, artist_id = ?, album = ?, duration_seconds = ?, cover_url = ?, file_mtime = ?, file_size = ? WHERE id = ?',
-        [track.title, track.artist_id, track.album, track.duration_seconds ?? null, track.cover_url, track.file_mtime ?? null, track.file_size ?? null, existing.id],
+        'UPDATE tracks SET title = ?, artist_id = ?, album = ?, duration_seconds = ?, cover_url = ?, file_mtime = ?, file_size = ?, genre = ?, year = ?, track_number = ?, disc_number = ?, composer = ? WHERE id = ?',
+        [track.title, track.artist_id, track.album, track.duration ?? null, track.cover_url, track.file_mtime ?? null, track.file_size ?? null, track.genre ?? null, track.year ?? null, track.track_number ?? null, track.disc_number ?? null, track.composer ?? null, existing.id],
         callback
       );
       return;
     }
 
     database.run(
-      'INSERT INTO tracks (title, artist_id, album, duration_seconds, file_path, cover_url, file_mtime, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [track.title, track.artist_id, track.album, track.duration_seconds ?? null, track.file_path, track.cover_url, track.file_mtime ?? null, track.file_size ?? null],
+      'INSERT INTO tracks (title, artist_id, album, duration_seconds, file_path, cover_url, file_mtime, file_size, genre, year, track_number, disc_number, composer) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [track.title, track.artist_id, track.album, track.duration ?? null, track.file_path, track.cover_url, track.file_mtime ?? null, track.file_size ?? null, track.genre ?? null, track.year ?? null, track.track_number ?? null, track.disc_number ?? null, track.composer ?? null],
       callback
     );
   });
 }
 
 function seedMusicLibrary(database, callback) {
-  console.log('Music directory:', musicDir);
-  if (!fs.existsSync(musicDir)) {
-    console.error(`Music directory not found: "${musicDir}"`);
-    return callback(null);
-  }
+  (async () => {
+    console.log('Music directory:', musicDir);
+    if (!fs.existsSync(musicDir)) {
+      console.error(`Music directory not found: "${musicDir}"`);
+      return callback(null);
+    }
 
-  const files = findAudioFiles(musicDir);
-  if (files.length === 0) {
-    console.warn(`No audio files found in "${musicDir}"`);
-    return callback(null);
-  }
+    const files = findAudioFiles(musicDir);
+    if (files.length === 0) {
+      console.warn(`No audio files found in "${musicDir}"`);
+      return callback(null);
+    }
 
-  removeMissingTracks(database, removeErr => {
-    if (removeErr) return callback(removeErr);
+    // Remove tracks for files that no longer exist
+    await new Promise((resolve, reject) => {
+      removeMissingTracks(database, err => err ? reject(err) : resolve());
+    });
 
-    let index = 0;
+    for (const filePath of files) {
+      let stat;
+      try { stat = fs.statSync(filePath); } catch { continue; }
 
-    function next(err) {
-      if (err) return callback(err);
-      if (index >= files.length) {
-        database.run('DELETE FROM artists WHERE id NOT IN (SELECT DISTINCT artist_id FROM tracks WHERE artist_id IS NOT NULL)', callback);
-        return;
+      // Read metadata from tags, fallback to folder/filename parsing
+      const track = await scanFile(filePath);
+
+      // Get or create artist
+      const artistId = await new Promise((resolve, reject) => {
+        getOrCreateArtist(database, track.artist, (err, id) => err ? reject(err) : resolve(id));
+      });
+
+      // Copy local cover if tags didn't provide one
+      let coverUrl = track.cover_url;
+      if (!coverUrl) {
+        const localCover = findCoverInDir(path.dirname(filePath));
+        if (localCover) coverUrl = copyCoverToCovers(localCover, artistId, track.album);
       }
 
-      const filePath = files[index++];
-      let stat;
-      try { stat = fs.statSync(filePath); } catch { return next(); }
-
-      const folder = path.basename(path.dirname(filePath));
-      const albumInfo = parseAlbumFolder(folder);
-      const durationSeconds = getAudioDuration(filePath);
-
-      getOrCreateArtist(database, albumInfo.artist, (artistErr, artistId) => {
-        if (artistErr) return callback(artistErr);
-
-        const localCover = findCoverInDir(path.dirname(filePath));
-        const coverUrl = localCover ? copyCoverToCovers(localCover, artistId, albumInfo.album) : null;
-
+      // Insert or update track in DB
+      await new Promise((resolve, reject) => {
         upsertTrack(database, {
-          title: parseTrackTitle(filePath),
+          title: track.title,
           artist_id: artistId,
-          album: albumInfo.album,
+          album: track.album,
           file_path: filePath,
           cover_url: coverUrl,
-          duration_seconds: durationSeconds,
+          duration: track.duration,
+          genre: track.genre,
+          year: track.year,
+          track_number: track.track_number,
+          disc_number: track.disc_number,
+          composer: track.composer,
           file_mtime: stat.mtimeMs,
           file_size: stat.size,
-        }, next);
+        }, err => err ? reject(err) : resolve());
       });
     }
 
-    next();
-  });
+    // Cleanup orphaned artists
+    await new Promise((resolve, reject) => {
+      database.run('DELETE FROM artists WHERE id NOT IN (SELECT DISTINCT artist_id FROM tracks WHERE artist_id IS NOT NULL)', err => err ? reject(err) : resolve());
+    });
+
+    callback(null);
+  })().catch(callback);
 }
 
 // ── Admin user ──────────────────────────────────────────────────────
