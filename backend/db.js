@@ -3,6 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true });
 
 const projectRoot = path.resolve(__dirname, '..');
@@ -12,20 +13,18 @@ const dbPath = process.env.DB_PATH
 const musicDir = process.env.MUSIC_DIR
   ? (process.env.MUSIC_DIR.startsWith('~/') ? path.join(os.homedir(), process.env.MUSIC_DIR.slice(2)) : path.resolve(projectRoot, process.env.MUSIC_DIR))
   : path.join(projectRoot, 'music');
-console.log('Music directory:', musicDir);
+const coversDir = path.resolve(projectRoot, 'frontend', 'public', 'covers');
 const supportedAudioExtensions = new Set(['.flac', '.mp3', '.ogg', '.m4a', '.opus']);
 const supportedCoverExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+
 let db;
 
 function openDb() {
   if (!db) {
     db = new sqlite3.Database(dbPath, (err) => {
-      if (err) {
-        console.error('Error opening database:', err.message);
-      }
+      if (err) console.error('Error opening database:', err.message);
     });
   }
-
   return db;
 }
 
@@ -64,6 +63,8 @@ const createTableSql = `
     duration_seconds INTEGER,
     file_path TEXT,
     cover_url TEXT,
+    file_mtime INTEGER,
+    file_size INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (artist_id) REFERENCES artists(id)
   );
@@ -91,11 +92,24 @@ const createTableSql = `
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, item_type, item_id)
   );
+
+  CREATE TABLE IF NOT EXISTS enrichment_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    total_items INTEGER DEFAULT 0,
+    processed_items INTEGER DEFAULT 0,
+    current_step TEXT,
+    enriched_items TEXT,
+    errors TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at DATETIME
+  );
 `;
 
 function findAudioFiles(dir) {
   if (!fs.existsSync(dir)) return [];
-
   const files = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name);
@@ -105,38 +119,32 @@ function findAudioFiles(dir) {
       files.push(fullPath);
     }
   }
-
   return files.sort();
 }
 
 function parseAlbumFolder(folderName) {
-  const match = folderName.match(/^(.*?)\s+-\s+(.*?)(?:\s+\((\d{4})\))?$/);
-  if (!match) return { artist: 'Unknown Artist', album: folderName };
-
-  return {
-    artist: match[1].trim() || 'Unknown Artist',
-    album: match[3] ? `${match[2].trim()} (${match[3]})` : match[2].trim() || folderName,
-  };
+  let m = folderName.match(/^(.*?)\s+[-–]\s+(.*?)\s*[\(\[](\d{4})[\)\]]\s*$/);
+  if (m) return { artist: m[1].trim(), album: `${m[2].trim()} (${m[3]})` };
+  m = folderName.match(/^(.*?)\s+[-–]\s+(.*)$/);
+  if (m) return { artist: m[1].trim(), album: m[2].trim() };
+  return { artist: 'Unknown Artist', album: folderName };
 }
 
 function parseTrackTitle(filePath) {
-  return path
-    .basename(filePath, path.extname(filePath))
-    .replace(/^\d+\s*[-._]\s*/, '')
-    .trim();
+  return path.basename(filePath, path.extname(filePath)).replace(/^\d+\s*[-._]\s*/, '').trim();
 }
 
-function findCoverForTrack(filePath) {
-  const dir = path.dirname(filePath);
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  const cover = entries.find((entry) => {
-    if (!entry.isFile()) return false;
-    const ext = path.extname(entry.name).toLowerCase();
-    const name = path.basename(entry.name, ext).toLowerCase();
-    return supportedCoverExtensions.has(ext) && ['cover', 'folder', 'front'].includes(name);
-  });
-
-  return cover ? path.join(dir, cover.name) : null;
+function findCoverInDir(dir) {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const cover = entries.find(e => {
+      if (!e.isFile()) return false;
+      const ext = path.extname(e.name).toLowerCase();
+      const name = path.basename(e.name, ext).toLowerCase();
+      return supportedCoverExtensions.has(ext) && ['cover', 'folder', 'front'].includes(name);
+    });
+    return cover ? path.join(dir, cover.name) : null;
+  } catch { return null; }
 }
 
 function getAudioDuration(filePath) {
@@ -144,65 +152,137 @@ function getAudioDuration(filePath) {
     const result = spawnSync('ffprobe', [
       '-v', 'error', '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
-    ], { timeout: 5000, encoding: 'utf-8' });
+    ], { timeout: 10000, encoding: 'utf-8' });
     if (result.status !== 0 || !result.stdout) return null;
     return Math.round(parseFloat(result.stdout.trim()));
-  } catch {
+  } catch { return null; }
+}
+
+function ensureCoversDir() {
+  if (!fs.existsSync(coversDir)) fs.mkdirSync(coversDir, { recursive: true });
+}
+
+// Copy a local cover file to covers/ with deterministic name, return relative path
+function copyCoverToCovers(sourcePath, artistId, album) {
+  if (!sourcePath || !fs.existsSync(sourcePath)) return null;
+  ensureCoversDir();
+  const ext = path.extname(sourcePath).toLowerCase();
+  const hash = crypto.createHash('md5').update(album || sourcePath).digest('hex').slice(0, 12);
+  const destName = `album_${artistId}_${hash}${ext}`;
+  const destPath = path.join(coversDir, destName);
+  if (fs.existsSync(destPath)) return `covers/${destName}`;
+  try {
+    fs.copyFileSync(sourcePath, destPath);
+    return `covers/${destName}`;
+  } catch (e) {
+    console.error('Failed to copy cover:', e.message);
     return null;
   }
 }
 
+// ── Schema migrations ──────────────────────────────────────────────
+
 function migrateSchema(database, callback) {
   database.all('PRAGMA table_info(tracks)', (err, columns) => {
     if (err) return callback(err);
+    const cols = columns.map(c => c.name);
 
-    const hasAlbum = columns.some((column) => column.name === 'album');
-    if (!hasAlbum) {
-      database.run('ALTER TABLE tracks ADD COLUMN album TEXT');
-    }
+    const stmts = [];
+    if (!cols.includes('album')) stmts.push('ALTER TABLE tracks ADD COLUMN album TEXT');
+    if (!cols.includes('file_mtime')) stmts.push('ALTER TABLE tracks ADD COLUMN file_mtime INTEGER');
+    if (!cols.includes('file_size')) stmts.push('ALTER TABLE tracks ADD COLUMN file_size INTEGER');
 
     database.all('PRAGMA table_info(users)', (err, userCols) => {
       if (err) return callback(err);
+      const ucols = userCols.map(c => c.name);
+      if (!ucols.includes('is_admin')) stmts.push("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0");
 
-      const hasAdmin = userCols.some((col) => col.name === 'is_admin');
-      if (hasAdmin) return afterUsers(database, callback);
+      database.all('PRAGMA table_info(likes)', (err, likeCols) => {
+        if (err) return callback(err);
+        const needsLikesRecreate = likeCols.map(c => c.name).includes('track_id');
 
-      database.run("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0", (alterErr) => {
-        if (alterErr) return callback(alterErr);
-        afterUsers(database, callback);
+        // Unique index for case-insensitive artist lookup
+        stmts.push('CREATE UNIQUE INDEX IF NOT EXISTS idx_artists_name_lower ON artists(lower(name))');
+
+        function runNext(idx) {
+          if (idx >= stmts.length) {
+            if (needsLikesRecreate) {
+              database.run('DROP TABLE IF EXISTS likes', dropErr => {
+                if (dropErr) return callback(dropErr);
+                database.run(`CREATE TABLE likes (
+                  user_id TEXT NOT NULL, item_type TEXT NOT NULL,
+                  item_id TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  PRIMARY KEY (user_id, item_type, item_id)
+                )`, callback);
+              });
+            } else {
+              callback();
+            }
+            return;
+          }
+          database.run(stmts[idx], err => {
+            if (err) return callback(err);
+            runNext(idx + 1);
+          });
+        }
+        runNext(0);
       });
     });
   });
 }
 
-function afterUsers(database, callback) {
-  database.all('PRAGMA table_info(likes)', (err, likeCols) => {
+// Normalize existing cover_url entries to `covers/` relative paths
+function migrateCovers(database, callback) {
+  database.all("SELECT id, cover_url FROM tracks WHERE cover_url IS NOT NULL AND cover_url != ''", (err, rows) => {
     if (err) return callback(err);
-    const hasTrackId = likeCols.some(c => c.name === 'track_id');
-    if (!hasTrackId) return callback();
-    database.run('DROP TABLE IF EXISTS likes', (dropErr) => {
-      if (dropErr) return callback(dropErr);
-      database.run(`CREATE TABLE likes (
-        user_id TEXT NOT NULL, item_type TEXT NOT NULL,
-        item_id TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, item_type, item_id)
-      )`, callback);
-    });
+    let idx = 0;
+
+    function next() {
+      if (idx >= rows.length) return callback();
+      const row = rows[idx++];
+      const old = row.cover_url;
+
+      if (old.startsWith('covers/')) return next();
+
+      let newUrl = null;
+      if (path.isAbsolute(old) && fs.existsSync(old)) {
+        // Local cover file — copy to covers dir
+        ensureCoversDir();
+        const ext = path.extname(old).toLowerCase();
+        const hash = crypto.createHash('md5').update(old).digest('hex').slice(0, 12);
+        const destName = `cover_${hash}${ext}`;
+        const destPath = path.join(coversDir, destName);
+        if (!fs.existsSync(destPath)) {
+          try { fs.copyFileSync(old, destPath); } catch {}
+        }
+        newUrl = `covers/${destName}`;
+      } else if (!path.isAbsolute(old)) {
+        // Bare filename from old enricher — file should already be in covers dir
+        newUrl = `covers/${old}`;
+      }
+
+      if (newUrl) {
+        database.run('UPDATE tracks SET cover_url = ? WHERE id = ?', [newUrl, row.id], err => {
+          if (err) console.error('Cover migration error:', err.message);
+          next();
+        });
+      } else {
+        database.run('UPDATE tracks SET cover_url = NULL WHERE id = ?', [row.id], next);
+      }
+    }
+    next();
   });
 }
+
+// ── Music library seeding ──────────────────────────────────────────
 
 function removeMissingTracks(database, callback) {
   database.all('SELECT id, file_path FROM tracks WHERE file_path IS NOT NULL', (err, tracks) => {
     if (err) return callback(err);
-
-    const missingTrackIds = tracks
-      .filter((track) => !fs.existsSync(path.resolve(track.file_path)))
-      .map((track) => track.id);
-
-    if (missingTrackIds.length === 0) return callback();
-
-    const placeholders = missingTrackIds.map(() => '?').join(',');
-    database.run(`DELETE FROM tracks WHERE id IN (${placeholders})`, missingTrackIds, callback);
+    const missingIds = tracks.filter(t => !fs.existsSync(path.resolve(t.file_path))).map(t => t.id);
+    if (missingIds.length === 0) return callback();
+    const ph = missingIds.map(() => '?').join(',');
+    database.run(`DELETE FROM tracks WHERE id IN (${ph})`, missingIds, callback);
   });
 }
 
@@ -210,90 +290,110 @@ function getOrCreateArtist(database, name, callback) {
   database.get('SELECT id FROM artists WHERE lower(name) = lower(?)', [name], (err, artist) => {
     if (err) return callback(err);
     if (artist) return callback(null, artist.id);
-
-    database.run('INSERT INTO artists (name) VALUES (?)', [name], function(insertErr) {
+    database.run('INSERT OR IGNORE INTO artists (name) VALUES (?)', [name], function(insertErr) {
       if (insertErr) return callback(insertErr);
-      callback(null, this.lastID);
+      if (this.changes > 0) return callback(null, this.lastID);
+      database.get('SELECT id FROM artists WHERE lower(name) = lower(?)', [name], (err2, a2) => {
+        if (err2) return callback(err2);
+        callback(null, a2.id);
+      });
     });
   });
 }
 
 function upsertTrack(database, track, callback) {
-  database.get('SELECT id, duration_seconds FROM tracks WHERE file_path = ?', [track.file_path], (err, existingTrack) => {
+  database.get('SELECT id, duration_seconds, file_mtime, file_size FROM tracks WHERE file_path = ?', [track.file_path], (err, existing) => {
     if (err) return callback(err);
 
-    if (existingTrack) {
-      if (track.duration_seconds && !existingTrack.duration_seconds) {
-        database.run('UPDATE tracks SET duration_seconds = ? WHERE id = ?', [track.duration_seconds, existingTrack.id], callback);
-      } else {
-        callback();
+    if (existing) {
+      // File unchanged → skip unless we need to fill in duration
+      if (track.file_mtime !== undefined && track.file_mtime === existing.file_mtime) {
+        if (track.duration_seconds && !existing.duration_seconds) {
+          database.run('UPDATE tracks SET duration_seconds = ? WHERE id = ?', [track.duration_seconds, existing.id], callback);
+        } else {
+          callback();
+        }
+        return;
       }
+      // File changed → update
+      database.run(
+        'UPDATE tracks SET title = ?, artist_id = ?, album = ?, duration_seconds = ?, cover_url = ?, file_mtime = ?, file_size = ? WHERE id = ?',
+        [track.title, track.artist_id, track.album, track.duration_seconds ?? null, track.cover_url, track.file_mtime ?? null, track.file_size ?? null, existing.id],
+        callback
+      );
       return;
     }
 
     database.run(
-      'INSERT INTO tracks (title, artist_id, album, duration_seconds, file_path, cover_url) VALUES (?, ?, ?, ?, ?, ?)',
-      [track.title, track.artist_id, track.album, track.duration_seconds ?? null, track.file_path, track.cover_url],
+      'INSERT INTO tracks (title, artist_id, album, duration_seconds, file_path, cover_url, file_mtime, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [track.title, track.artist_id, track.album, track.duration_seconds ?? null, track.file_path, track.cover_url, track.file_mtime ?? null, track.file_size ?? null],
       callback
     );
   });
 }
 
 function seedMusicLibrary(database, callback) {
+  console.log('Music directory:', musicDir);
   if (!fs.existsSync(musicDir)) {
-    console.error(`Music directory not found: "${musicDir}". Set MUSIC_DIR in backend/.env or place audio files in music/.`);
+    console.error(`Music directory not found: "${musicDir}"`);
     return callback(null);
   }
 
   const files = findAudioFiles(musicDir);
-
   if (files.length === 0) {
-    console.warn(`No audio files found in "${musicDir}". Supported formats: flac, mp3, ogg, m4a, opus. Set MUSIC_DIR in backend/.env to a different path.`);
+    console.warn(`No audio files found in "${musicDir}"`);
     return callback(null);
   }
 
-  let index = 0;
+  removeMissingTracks(database, removeErr => {
+    if (removeErr) return callback(removeErr);
 
-  function next(err) {
-    if (err) return callback(err);
-    if (index >= files.length) {
-      database.run('DELETE FROM artists WHERE id NOT IN (SELECT DISTINCT artist_id FROM tracks WHERE artist_id IS NOT NULL)', callback);
-      return;
+    let index = 0;
+
+    function next(err) {
+      if (err) return callback(err);
+      if (index >= files.length) {
+        database.run('DELETE FROM artists WHERE id NOT IN (SELECT DISTINCT artist_id FROM tracks WHERE artist_id IS NOT NULL)', callback);
+        return;
+      }
+
+      const filePath = files[index++];
+      let stat;
+      try { stat = fs.statSync(filePath); } catch { return next(); }
+
+      const folder = path.basename(path.dirname(filePath));
+      const albumInfo = parseAlbumFolder(folder);
+      const durationSeconds = getAudioDuration(filePath);
+
+      getOrCreateArtist(database, albumInfo.artist, (artistErr, artistId) => {
+        if (artistErr) return callback(artistErr);
+
+        const localCover = findCoverInDir(path.dirname(filePath));
+        const coverUrl = localCover ? copyCoverToCovers(localCover, artistId, albumInfo.album) : null;
+
+        upsertTrack(database, {
+          title: parseTrackTitle(filePath),
+          artist_id: artistId,
+          album: albumInfo.album,
+          file_path: filePath,
+          cover_url: coverUrl,
+          duration_seconds: durationSeconds,
+          file_mtime: stat.mtimeMs,
+          file_size: stat.size,
+        }, next);
+      });
     }
 
-    const filePath = files[index];
-    index += 1;
-
-    const folder = path.basename(path.dirname(filePath));
-    const albumInfo = parseAlbumFolder(folder);
-    const coverPath = findCoverForTrack(filePath);
-    const durationSeconds = getAudioDuration(filePath);
-
-    getOrCreateArtist(database, albumInfo.artist, (artistErr, artistId) => {
-      if (artistErr) return callback(artistErr);
-
-      upsertTrack(database, {
-        title: parseTrackTitle(filePath),
-        artist_id: artistId,
-        album: albumInfo.album,
-        file_path: filePath,
-        cover_url: coverPath,
-        duration_seconds: durationSeconds,
-      }, next);
-    });
-  }
-
-  removeMissingTracks(database, (removeErr) => {
-    if (removeErr) return callback(removeErr);
     next();
   });
 }
+
+// ── Admin user ──────────────────────────────────────────────────────
 
 function seedAdminUser(database, callback) {
   database.get("SELECT id FROM users WHERE is_admin = 1", (err, row) => {
     if (err) return callback(err);
     if (row) return callback();
-
     const bcrypt = require('bcryptjs');
     bcrypt.hash('admin123', 10, (hashErr, hash) => {
       if (hashErr) return callback(hashErr);
@@ -302,28 +402,27 @@ function seedAdminUser(database, callback) {
   });
 }
 
+// ── Initialize DB (tables + migrations only) ──────────────────────
+
 function initializeDb(callback) {
   const database = openDb();
-
   database.serialize(() => {
-    database.exec(createTableSql, (createErr) => {
+    database.exec(createTableSql, createErr => {
       if (createErr) return callback(createErr);
-
-      migrateSchema(database, (migrationErr) => {
+      migrateSchema(database, migrationErr => {
         if (migrationErr) return callback(migrationErr);
-
-        seedAdminUser(database, (seedErr) => {
-          if (seedErr) return callback(seedErr);
-
-          seedMusicLibrary(database, callback);
+        migrateCovers(database, coverErr => {
+          if (coverErr) return callback(coverErr);
+          seedAdminUser(database, callback);
         });
       });
     });
   });
 }
 
-module.exports = { 
+module.exports = {
   openDb,
   initializeDb,
   seedMusicLibrary,
+  get coversDir() { return coversDir; },
 };

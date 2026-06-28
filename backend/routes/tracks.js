@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const db = require('../db').openDb();
+const coversDir = path.resolve(__dirname, '..', '..', 'frontend', 'public', 'covers');
 
 const audioContentTypes = {
   '.flac': 'audio/flac',
@@ -38,10 +39,16 @@ router.get('/:id/cover', (req, res) => {
   db.get("SELECT cover_url FROM tracks WHERE id = ?", [req.params.id], (err, track) => {
     if (err || !track || !track.cover_url) return res.status(404).json({ error: 'Cover not found' });
 
-    const coversDir = path.resolve(__dirname, '..', 'frontend', 'public', 'covers');
-    const filePath = track.cover_url.startsWith('/covers/')
-      ? path.join(coversDir, path.basename(track.cover_url))
-      : path.resolve(track.cover_url);
+    // cover_url format: 'covers/xxx' (new), absolute path (legacy local), bare filename (legacy enricher)
+    let filePath;
+    if (track.cover_url.startsWith('covers/')) {
+      filePath = path.join(coversDir, track.cover_url.slice(7));
+    } else if (path.isAbsolute(track.cover_url)) {
+      filePath = track.cover_url;
+    } else {
+      // bare filename fallback
+      filePath = path.join(coversDir, track.cover_url);
+    }
 
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Cover not found' });
 

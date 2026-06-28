@@ -4,7 +4,7 @@ const db = require('../db').openDb();
 
 const fmt = (row) => ({
   ...row,
-  image_url: row.image_url ? (row.image_url.startsWith('http') ? row.image_url : `/covers/${row.image_url}`) : null,
+  image_url: row.image_url ? (row.image_url.startsWith('http') ? row.image_url : (row.image_url.startsWith('covers/') ? `/covers/${row.image_url.slice(7)}` : `/covers/${row.image_url}`)) : null,
 });
 
 router.get('/', (req, res) => {

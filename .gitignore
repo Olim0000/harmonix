@@ -5,3 +5,5 @@ music/
 *.db-wal
 backend/.env
 frontend/dist/
+*.db
+frontend/public/covers/
