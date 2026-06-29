@@ -308,7 +308,7 @@ function migrateCovers(database, callback) {
       const row = rows[idx++];
       const old = row.cover_url;
 
-      if (old.startsWith('covers/')) return next();
+      if (old.startsWith('covers/')) return setImmediate(next);
 
       let newUrl = null;
       if (path.isAbsolute(old) && fs.existsSync(old)) {
