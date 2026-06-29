@@ -33,16 +33,16 @@ initializeDb((err) => {
     process.exit(1);
   }
 
-  app.listen(port, () => console.log(`Server running on port ${port}`));
-
-  // Auto-seed on first run (empty library) — runs in background after login works
   const db = require('./db').openDb();
   db.get('SELECT COUNT(*) AS cnt FROM tracks', (countErr, row) => {
     if (!countErr && row && row.cnt === 0) {
-      console.log('Empty library — running initial scan...');
+      console.log('Initial scan in progress — login will be available once complete');
       require('./db').seedMusicLibrary(db, (seedErr) => {
         if (seedErr) console.error('Initial scan error:', seedErr.message);
+        app.listen(port, () => console.log(`Server running on port ${port}`));
       });
+    } else {
+      app.listen(port, () => console.log(`Server running on port ${port}`));
     }
   });
 });
