@@ -116,31 +116,17 @@ const createTableSql = `
 
 function findAudioFiles(dir) {
   if (!fs.existsSync(dir)) return [];
-  let entries;
+  const exts = [...supportedAudioExtensions];
+  const pattern = exts.map(e => `-name '*${e}'`).join(' -o ');
   try {
-    entries = fs.readdirSync(dir);
+    const out = require('child_process').execSync(
+      `find "${dir}" -type f \\( ${pattern} \\)`,
+      { encoding: 'utf-8', timeout: 300000 }
+    );
+    return out.trim().split('\n').filter(Boolean).sort();
   } catch {
-    console.error(`[Scan] Cannot read directory: ${dir}`);
     return [];
   }
-  const files = [];
-  for (const name of entries) {
-    const fullPath = path.join(dir, name);
-    try {
-      const stat = fs.statSync(fullPath);
-      if (stat.isDirectory()) {
-        files.push(...findAudioFiles(fullPath));
-      } else if (supportedAudioExtensions.has(path.extname(name).toLowerCase())) {
-        files.push(fullPath);
-      }
-    } catch {
-      // skip unreadable entries (broken symlinks, permissions, etc.)
-    }
-    if (files.length % 1000 === 0 && files.length > 0) {
-      console.log(`[Scan] Found ${files.length} files...`);
-    }
-  }
-  return files.sort();
 }
 
 function parseAlbumFolder(folderName) {
