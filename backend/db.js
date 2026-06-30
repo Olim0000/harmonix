@@ -200,10 +200,17 @@ async function saveCoverFromBuffer(picture, filePath) {
   return `covers/${name}`;
 }
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ]);
+}
+
 // Read metadata from audio file; fallback to folder/filename parsing
 async function scanFile(filePath) {
   try {
-    const meta = await mm.parseFile(filePath, { duration: false });
+    const meta = await withTimeout(mm.parseFile(filePath, { duration: false }), 15000);
     const c = meta.common;
     let coverUrl = null;
     if (c.picture?.[0]) coverUrl = await saveCoverFromBuffer(c.picture[0], filePath);
