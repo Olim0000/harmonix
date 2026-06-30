@@ -468,7 +468,7 @@ function seedMusicLibrary(database, callback) {
 function seedAdminUser(database, callback) {
   database.get("SELECT id FROM users WHERE is_admin = 1", (err, row) => {
     if (err) return callback(err);
-    if (row) return callback();
+    if (row) { console.log('[DB] Admin user already exists'); return callback(); }
     const bcrypt = require('bcryptjs');
     bcrypt.hash('admin123', 10, (hashErr, hash) => {
       if (hashErr) return callback(hashErr);
@@ -480,15 +480,22 @@ function seedAdminUser(database, callback) {
 // ── Initialize DB (tables + migrations only) ──────────────────────
 
 function initializeDb(callback) {
+  console.log('[DB] Initializing database...');
   const database = openDb();
   database.serialize(() => {
     database.exec(createTableSql, createErr => {
       if (createErr) return callback(createErr);
+      console.log('[DB] Running schema migrations...');
       migrateSchema(database, migrationErr => {
         if (migrationErr) return callback(migrationErr);
+        console.log('[DB] Running cover path migration...');
         migrateCovers(database, coverErr => {
           if (coverErr) return callback(coverErr);
-          seedAdminUser(database, callback);
+          console.log('[DB] Ensuring admin user...');
+          seedAdminUser(database, err => {
+            if (!err) console.log('[DB] Database initialized');
+            callback(err);
+          });
         });
       });
     });
