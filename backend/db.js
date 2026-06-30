@@ -121,10 +121,11 @@ function findAudioFiles(dir) {
   try {
     const out = require('child_process').execSync(
       `find "${dir}" -type f \\( ${pattern} \\)`,
-      { encoding: 'utf-8', timeout: 300000 }
+      { encoding: 'utf-8', timeout: 300000, maxBuffer: 50 * 1024 * 1024 }
     );
     return out.trim().split('\n').filter(Boolean).sort();
-  } catch {
+  } catch (e) {
+    console.error('[Scan] find failed:', e.message);
     return [];
   }
 }
