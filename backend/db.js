@@ -124,6 +124,9 @@ function findAudioFiles(dir) {
     } else if (supportedAudioExtensions.has(path.extname(entry.name).toLowerCase())) {
       files.push(fullPath);
     }
+    if (files.length % 1000 === 0 && files.length > 0) {
+      console.log(`[Scan] Found ${files.length} files...`);
+    }
   }
   return files.sort();
 }
@@ -406,6 +409,7 @@ function upsertTrack(database, track, callback) {
 function seedMusicLibrary(database, callback) {
   (async () => {
     console.log('Music directory:', musicDir);
+    console.log('[Scan] Walking directory tree...');
     if (!fs.existsSync(musicDir)) {
       console.error(`Music directory not found: "${musicDir}"`);
       return callback(null);
