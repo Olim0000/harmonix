@@ -114,20 +114,32 @@ const createTableSql = `
   );
 `;
 
-function findAudioFiles(dir) {
-  if (!fs.existsSync(dir)) return [];
+function findAudioFiles(dir, callback) {
+  if (!fs.existsSync(dir)) return callback([]);
   const exts = [...supportedAudioExtensions];
-  const pattern = exts.map(e => `-name '*${e}'`).join(' -o ');
-  try {
-    const out = require('child_process').execSync(
-      `find "${dir}" -type f \\( ${pattern} \\)`,
-      { encoding: 'utf-8', timeout: 300000, maxBuffer: 50 * 1024 * 1024 }
-    );
-    return out.trim().split('\n').filter(Boolean).sort();
-  } catch (e) {
-    console.error('[Scan] find failed:', e.message);
-    return [];
-  }
+  const args = [dir, '-type', 'f', '(', ...exts.flatMap(e => ['-name', `*${e}`]), ')'];
+  const child = require('child_process').spawn('find', args);
+  const lines = [];
+  let lastLog = 0;
+  child.stdout.on('data', chunk => {
+    for (const line of chunk.toString().split('\n').filter(Boolean)) {
+      lines.push(line);
+    }
+    if (lines.length - lastLog >= 1000) {
+      console.log(`[Scan] Found ${lines.length} files...`);
+      lastLog = lines.length;
+    }
+  });
+  child.stderr.on('data', chunk => console.error('[Scan] find stderr:', chunk.toString()));
+  child.on('close', code => {
+    if (code !== 0) console.warn(`[Scan] find exited with code ${code}`);
+    lines.sort();
+    callback(lines);
+  });
+  child.on('error', err => {
+    console.error('[Scan] find error:', err.message);
+    callback([]);
+  });
 }
 
 function parseAlbumFolder(folderName) {
@@ -414,7 +426,7 @@ function seedMusicLibrary(database, callback) {
       return callback(null);
     }
 
-    const files = findAudioFiles(musicDir);
+    const files = await new Promise(resolve => findAudioFiles(musicDir, resolve));
     if (files.length === 0) {
       console.warn(`No audio files found in "${musicDir}"`);
       return callback(null);
