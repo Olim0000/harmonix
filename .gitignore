@@ -30,6 +30,7 @@ npm-debug.log*
 .idea/
 *.swp
 *.swo
+.opencode/
 
 # OS
 .DS_Store
