@@ -1,9 +1,50 @@
+# Dependencies
 node_modules/
-music/
-.vscode/
-*.db-shm
-*.db-wal
-backend/.env
-frontend/dist/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database
 *.db
-frontend/public/covers/
+*.db-wal
+*.db-shm
+data/harmonix.db*
+
+# Covers
+data/covers/*
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# Vite
+.vite/
+
+# Frontend build
+frontend/dist/

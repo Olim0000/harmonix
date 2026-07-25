@@ -1,1 +1,30 @@
-{}
+{
+  "name": "harmonix",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c cyan,magenta \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "build": "npm run build --workspaces",
+    "start": "npm run start --workspace=backend",
+    "test": "npm run test --workspaces",
+    "smoke": "bash scripts/smoke.sh",
+    "lint": "npm run lint --workspaces",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@10.8.2",
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
+  }
+}
