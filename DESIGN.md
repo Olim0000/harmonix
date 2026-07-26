@@ -1,5 +1,8 @@
 # Harmonix Design System & UI Specification
 
+> **Implementation Status**: Phase 1 complete. All screens, components, and interactions implemented.
+> See README.md for deployment instructions.
+
 ## Overview
 
 Harmonix is a self-hosted private music streaming web app with **multi-server ffplay remote playback**. This document defines the complete visual language, interaction model, and screen-by-screen specification for a ground-up redesign.

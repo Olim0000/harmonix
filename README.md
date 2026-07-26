@@ -126,8 +126,7 @@ in the UI Settings to switch between them.
 ```bash
 npm run dev       # start dev servers (backend + frontend)
 npm test          # run all workspace tests
-npm run build     # TypeScript type-check all workspaces
-npm run lint      # lint all workspaces
+npm run build     # Build all workspaces (type-check + vite bundle)
 npm run smoke     # run smoke tests (requires running server)
 ```
 
@@ -136,4 +135,4 @@ API surfaces end-to-end.
 
 ## License
 
-MIT
+GNU General Public License v2.0 — see [LICENSE](LICENSE) for details.

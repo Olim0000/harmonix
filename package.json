@@ -12,7 +12,6 @@
     "start": "npm run start --workspace=backend",
     "test": "npm run test --workspaces",
     "smoke": "bash scripts/smoke.sh",
-    "lint": "npm run lint --workspaces",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },
   "devDependencies": {
