@@ -10,7 +10,7 @@ function isPlayerRoute(path: string): boolean {
 
 /**
  * Get the allowed origin for player routes.
- * If SOURCE_URL env is set, restrict to that origin. Otherwise use echo origin behavior.
+ * If SOURCE_URL env is set, restrict to that origin only. Otherwise use echo origin behavior.
  */
 function getAllowedOriginForPlayer(c: Context): string | null {
   const sourceUrl = process.env.SOURCE_URL;
@@ -38,7 +38,7 @@ export function corsMiddleware(): (c: Context, next: Next) => Promise<Response |
       if (playerOrigin && origin) {
         if (origin === playerOrigin) {
           c.header('Access-Control-Allow-Origin', origin);
-          c.header('Access-Control-Allow-Credentials', 'true'); // Fix H1
+          c.header('Access-Control-Allow-Credentials', 'true');
           c.header('Vary', 'Origin');
         } else {
           // Origin doesn't match — don't set CORS headers (browser will block)
@@ -50,19 +50,17 @@ export function corsMiddleware(): (c: Context, next: Next) => Promise<Response |
           c.header('Access-Control-Allow-Origin', origin);
           c.header('Access-Control-Allow-Credentials', 'true');
           c.header('Vary', 'Origin');
-        } else {
-          c.header('Access-Control-Allow-Origin', '*');
         }
+        // If no origin header, don't set * with credentials (browsers reject that)
       }
     } else {
-      // Non-player routes: standard echo origin (P1a invariant)
+      // Non-player routes: standard echo origin
       if (origin) {
         c.header('Access-Control-Allow-Origin', origin);
         c.header('Access-Control-Allow-Credentials', 'true');
         c.header('Vary', 'Origin');
-      } else {
-        c.header('Access-Control-Allow-Origin', '*');
       }
+      // If no origin header, don't set any CORS headers (not a cross-origin request)
     }
 
     c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');

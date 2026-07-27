@@ -35,14 +35,14 @@ describe('parseRangeHeader', () => {
     expect(result).toEqual({ kind: 'invalid' });
   });
 
-  it('returns {kind:"invalid"} when Range header is malformed (bytes=abc)', () => {
+  it('returns {kind:"none"} when Range header is malformed (bytes=abc)', () => {
     const result = parseRangeHeader('bytes=abc', SIZE);
-    expect(result).toEqual({ kind: 'invalid' });
+    expect(result).toEqual({ kind: 'none' });
   });
 
-  it('returns {kind:"invalid"} when Range header has no bytes= prefix', () => {
+  it('returns {kind:"none"} when Range header has no bytes= prefix', () => {
     const result = parseRangeHeader('cats=0-99', SIZE);
-    expect(result).toEqual({ kind: 'invalid' });
+    expect(result).toEqual({ kind: 'none' });
   });
 
   it('returns {kind:"invalid"} when start > end', () => {

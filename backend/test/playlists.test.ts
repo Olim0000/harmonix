@@ -69,7 +69,7 @@ describe('POST /api/playlists — create', () => {
       headers: auth(token),
       body: JSON.stringify({ name: 'My Favorites' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body: any = await res.json();
     expect(body.id).toBeGreaterThan(0);
     expect(body.name).toBe('My Favorites');
@@ -93,7 +93,7 @@ describe('POST /api/playlists — create', () => {
       headers: auth(token),
       body: JSON.stringify({ name: 'My Favorites' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
   });
 
   it('returns 401 without auth', async () => {

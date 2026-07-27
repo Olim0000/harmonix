@@ -3,6 +3,7 @@
  *
  * POST /api/admin/scan   — triggers a background scan
  * GET /api/admin/scan/stream — SSE stream of scan progress
+ * POST /api/admin/scan/cancel — cancel running scan
  */
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -34,7 +35,7 @@ export function getActiveJob(): ScanJob | null {
  * Returns 202 if scan started, 409 if already running.
  */
 router.post('/scan', async (c) => {
-  if (activeJob) {
+  if (activeJob?.isRunning()) {
     return c.json({ error: 'Scan already in progress' }, 409);
   }
 
@@ -63,9 +64,23 @@ router.post('/scan', async (c) => {
 });
 
 /**
+ * POST /api/admin/scan/cancel
+ * Cancels a running scan.
+ * Returns 200 if cancelled, 404 if no scan running.
+ */
+router.post('/scan/cancel', (c) => {
+  if (!activeJob?.isRunning()) {
+    return c.json({ error: 'No scan in progress' }, 404);
+  }
+
+  activeJob.cancel();
+  return c.json({ message: 'Scan cancelled' });
+});
+
+/**
  * GET /api/admin/scan/stream
  * SSE endpoint that streams scan progress events.
- * Sends progress event every ~500ms while scan runs,
+ * Sends progress event every ~300ms while scan runs,
  * then a 'done' event when scan completes.
  */
 router.get('/scan/stream', async (c) => {
@@ -74,12 +89,21 @@ router.get('/scan/stream', async (c) => {
   }
 
   return streamSSE(c, async (stream) => {
-    // Fix H2: detect client disconnect and break the loop
+    // Detect client disconnect and break the loop
     let cancelled = false;
     stream.onAbort(() => { cancelled = true; });
 
+    // Set headers for proxy compatibility (before writing)
+    c.header('Cache-Control', 'no-cache');
+    c.header('X-Accel-Buffering', 'no');
+    c.header('Connection', 'keep-alive');
+
     // Send initial progress immediately
-    const initialStatus = activeJob!.getStatus();
+    const job = activeJob;
+    if (!job) {
+      return;
+    }
+    const initialStatus = job.getStatus();
     await stream.writeSSE({
       event: 'progress',
       data: JSON.stringify(initialStatus),
@@ -97,14 +121,12 @@ router.get('/scan/stream', async (c) => {
     }
 
     // Send final status if not cancelled
-    if (!cancelled) {
-      if (activeJob) {
-        const finalStatus = activeJob.getStatus();
-        await stream.writeSSE({
-          event: 'progress',
-          data: JSON.stringify(finalStatus),
-        });
-      }
+    if (!cancelled && activeJob) {
+      const finalStatus = activeJob.getStatus();
+      await stream.writeSSE({
+        event: 'progress',
+        data: JSON.stringify(finalStatus),
+      });
 
       // Send done event
       await stream.writeSSE({

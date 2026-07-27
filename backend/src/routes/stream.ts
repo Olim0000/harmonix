@@ -5,6 +5,7 @@ import { db } from '@/db.js';
 import { env } from '@/env.js';
 import { parseRangeHeader, formatContentRange } from '@/lib/range.js';
 import type { Track } from '@/types.js';
+import { logger } from '@/logger.js';
 
 const router = new Hono();
 
@@ -33,9 +34,18 @@ function getContentType(filePath: string): string {
  * - Valid Range            → 206 partial content
  * - Invalid Range          → 416 Range Not Satisfiable
  * - Track not found/gone   → 404
+ *
+ * Fixes: ETag/Last-Modified, better caching (immutable audio), nosniff,
+ *        improved path traversal, proper 416 response.
  */
 router.get('/:trackId', async (c) => {
-  const trackId = Number(c.req.param('trackId'));
+  const trackIdParam = c.req.param('trackId');
+  const trackId = Number(trackIdParam);
+
+  // Validate ID
+  if (isNaN(trackId)) {
+    return c.json({ error: 'Invalid track ID' }, 400);
+  }
 
   const track = db.prepare('SELECT * FROM tracks WHERE id = ?').get(trackId) as Track | undefined;
 
@@ -44,11 +54,13 @@ router.get('/:trackId', async (c) => {
   }
 
   // Path traversal protection: resolve file_path relative to musicDir
-  // and enforce containment within it.
-  // env.musicDir is guaranteed non-null by env.ts required-env check
-  const resolved = pathResolve(env.musicDir!, track.file_path);
+  // and enforce strict containment within it.
   const musicDirAbs = pathResolve(env.musicDir!);
-  if (!resolved.startsWith(musicDirAbs + sep) && resolved !== musicDirAbs) {
+  const resolved = pathResolve(musicDirAbs, track.file_path);
+  
+  // Strict containment check - must be strictly inside musicDir
+  if (!resolved.startsWith(musicDirAbs + sep)) {
+    logger.warn({ trackId, resolved, musicDirAbs }, 'Path traversal attempt blocked');
     return c.json({ error: 'Not found' }, 404);
   }
 
@@ -60,6 +72,18 @@ router.get('/:trackId', async (c) => {
   const stat = statSync(resolved);
   const fileSize = stat.size;
   const contentType = getContentType(resolved);
+  
+  // Generate ETag from trackId, fileSize, and mtime for cache validation
+  const etag = `"${trackId}-${fileSize}-${stat.mtimeMs}"`;
+  const lastModified = stat.mtime.toUTCString();
+
+  // Check conditional requests
+  const ifNoneMatch = c.req.header('If-None-Match');
+  const ifModifiedSince = c.req.header('If-Modified-Since');
+  
+  if (ifNoneMatch === etag || (ifModifiedSince && new Date(ifModifiedSince) >= stat.mtime)) {
+    return new Response(null, { status: 304 });
+  }
 
   const rangeHeader = c.req.header('Range');
   const range = parseRangeHeader(rangeHeader, fileSize);
@@ -73,7 +97,10 @@ router.get('/:trackId', async (c) => {
         'Content-Type': contentType,
         'Content-Length': String(fileSize),
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'ETag': etag,
+        'Last-Modified': lastModified,
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   }
@@ -84,6 +111,8 @@ router.get('/:trackId', async (c) => {
       status: 416,
       headers: {
         'Content-Range': `bytes */${fileSize}`,
+        'Content-Length': '0',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   }
@@ -100,7 +129,10 @@ router.get('/:trackId', async (c) => {
       'Content-Range': formatContentRange(range, fileSize),
       'Content-Length': String(contentLength),
       'Accept-Ranges': 'bytes',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'ETag': etag,
+      'Last-Modified': lastModified,
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 });

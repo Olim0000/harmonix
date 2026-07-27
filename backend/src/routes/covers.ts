@@ -8,6 +8,8 @@ const router = new Hono();
 
 /**
  * Content-Type map for image extensions.
+ * NOTE: SVG is intentionally NOT included here to prevent XSS via embedded scripts.
+ * If a cover_path points to an SVG, we serve a placeholder instead.
  */
 const IMAGE_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -15,7 +17,6 @@ const IMAGE_TYPES: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
 };
 
 function getImageType(filePath: string): string {
@@ -37,12 +38,13 @@ function svgPlaceholderResponse(): Response {
     headers: {
       'Content-Type': 'image/svg+xml',
       'Cache-Control': 'public, max-age=86400',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }
 
 /**
- * Stream a cover file with correct Content-Type.
+ * Stream a cover file with correct Content-Type and security headers.
  */
 function streamFile(filePath: string, contentType: string): Response {
   const stream = createReadStream(filePath);
@@ -53,6 +55,7 @@ function streamFile(filePath: string, contentType: string): Response {
       'Content-Type': contentType,
       'Content-Length': String(stat.size),
       'Cache-Control': 'public, max-age=86400',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }
@@ -60,10 +63,22 @@ function streamFile(filePath: string, contentType: string): Response {
 /**
  * GET /api/covers/artist/:id
  * GET /api/covers/album/:id
+ *
+ * Auth: On source servers, auth is required (mounted with authMiddleware in index.ts).
+ * On player servers, no auth (covers are public).
+ *
+ * Path traversal protection: resolve imagePath relative to coversDir
+ * and enforce containment within it.
  */
 router.get('/:type/:id', (c) => {
   const type = c.req.param('type');
-  const id = Number(c.req.param('id'));
+  const idParam = c.req.param('id');
+  const id = Number(idParam);
+
+  // Validate ID is a valid number
+  if (isNaN(id) || !Number.isInteger(id) || id <= 0) {
+    return c.json({ error: 'Invalid cover ID' }, 400);
+  }
 
   let imagePath: string | null | undefined;
 
@@ -95,6 +110,12 @@ router.get('/:type/:id', (c) => {
 
   // File doesn't exist → placeholder
   if (!existsSync(full)) {
+    return svgPlaceholderResponse();
+  }
+
+  // Block SVG files to prevent XSS (scripts in SVG can execute in some contexts)
+  const ext = extname(full).toLowerCase();
+  if (ext === '.svg') {
     return svgPlaceholderResponse();
   }
 

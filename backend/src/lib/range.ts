@@ -18,6 +18,11 @@ export type RangeResult =
  * - `bytes=-suffix`   (last N bytes, per RFC 7233 section 2.1)
  *
  * Returns a discriminated result so callers can route to 200/206/416 correctly.
+ *
+ * Per RFC 7233:
+ * - If range unit is not "bytes" or syntax is invalid, ignore the header → serve 200 full content
+ * - If multiple ranges (bytes=0-100,200-300), ignore → serve 200 full content (simpler)
+ * - If range is unsatisfiable (start >= fileSize, etc.) → 416
  */
 export function parseRangeHeader(
   rangeHeader: string | undefined,
@@ -25,16 +30,23 @@ export function parseRangeHeader(
 ): RangeResult {
   if (!rangeHeader) return { kind: 'none' };
 
-  const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
-  if (!match) return { kind: 'invalid' };
+  // Trim whitespace (some clients send " bytes=0-100 ")
+  const trimmed = rangeHeader.trim();
+
+  // Only handle single byte-range (ignore multi-range per RFC 7233)
+  const match = trimmed.match(/^bytes=(\d*)-(\d*)$/);
+  if (!match) {
+    // Unknown unit or malformed → ignore per RFC 7233, serve full content
+    return { kind: 'none' };
+  }
 
   // bytes=-suffix → last N bytes (RFC 7233 section 2.1)
   if (match[1] === '' && match[2] !== '') {
     const suffix = parseInt(match[2], 10);
     // If suffix <= 0 or suffix >= fileSize, return full file? RFC says:
-    // "If the selected representation is shorter than the specified suffix-length,
-    //  the entire representation is used." but for our purposes the caller handles
-    //  this via the start being negative (clamped below) or we accept the range.
+    // "If the selected representation is shorter than the specified
+    //  suffix-length, the entire representation is used."
+    // For our purposes, invalid suffix (<= 0) → 416
     if (suffix <= 0) return { kind: 'invalid' };
     const start = Math.max(0, fileSize - suffix);
     const end = fileSize - 1;

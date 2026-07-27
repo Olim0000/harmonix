@@ -39,32 +39,30 @@ const FullscreenIconComponent: React.FC<{ size?: number }> = ({ size = 20 }) => 
 );
 
 export const PlayerBar: React.FC = () => {
-  const {
-    currentTrack,
-    isPlaying,
-    position,
-    duration,
-    volume,
-    shuffle,
-    repeat,
-    queue,
-    queueIndex,
-    playTrack,
-    pause,
-    resume,
-    seek,
-    setVolume,
-    toggleShuffle,
-    cycleRepeat,
-    next,
-    prev,
-    startPolling,
-    stopPolling,
-    toggleFullscreen,
-    toggleQueue,
-  } = usePlayerStore();
+  // Individual selectors — avoids re-render on every poll
+  const currentTrack = usePlayerStore(s => s.currentTrack);
+  const isPlaying = usePlayerStore(s => s.isPlaying);
+  const position = usePlayerStore(s => s.position);
+  const duration = usePlayerStore(s => s.duration);
+  const volume = usePlayerStore(s => s.volume);
+  const shuffle = usePlayerStore(s => s.shuffle);
+  const repeat = usePlayerStore(s => s.repeat);
+  // Methods — stable references, one selector each
+  const pause = usePlayerStore(s => s.pause);
+  const resume = usePlayerStore(s => s.resume);
+  const seek = usePlayerStore(s => s.seek);
+  const setVolume = usePlayerStore(s => s.setVolume);
+  const toggleShuffle = usePlayerStore(s => s.toggleShuffle);
+  const cycleRepeat = usePlayerStore(s => s.cycleRepeat);
+  const next = usePlayerStore(s => s.next);
+  const prev = usePlayerStore(s => s.prev);
+  const startPolling = usePlayerStore(s => s.startPolling);
+  const stopPolling = usePlayerStore(s => s.stopPolling);
+  const toggleFullscreen = usePlayerStore(s => s.toggleFullscreen);
+  const toggleQueue = usePlayerStore(s => s.toggleQueue);
 
   const progressRef = useRef<HTMLDivElement>(null);
+  const lastSeekRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
 
   // Start polling on mount
@@ -88,14 +86,33 @@ export const PlayerBar: React.FC = () => {
     [duration, seek]
   );
 
-  const handleProgressDrag = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!isDragging || !progressRef.current || !duration) return;
+  const doSeek = useCallback(
+    (clientX: number) => {
+      if (!progressRef.current || !duration) return;
+      const now = Date.now();
+      if (now - lastSeekRef.current < 100) return;
+      lastSeekRef.current = now;
       const rect = progressRef.current.getBoundingClientRect();
-      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       seek(pct * duration);
     },
-    [isDragging, duration, seek]
+    [duration, seek]
+  );
+
+  const handleProgressDrag = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!isDragging) return;
+      doSeek(e.clientX);
+    },
+    [isDragging, doSeek]
+  );
+
+  const handleProgressDragTouch = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!isDragging) return;
+      doSeek(e.touches[0].clientX);
+    },
+    [isDragging, doSeek]
   );
 
   // If no track loaded, render minimal bar
@@ -322,6 +339,10 @@ export const PlayerBar: React.FC = () => {
         onMouseUp={() => setIsDragging(false)}
         onMouseMove={handleProgressDrag}
         onMouseLeave={() => setIsDragging(false)}
+        onTouchStart={() => setIsDragging(true)}
+        onTouchMove={handleProgressDragTouch}
+        onTouchEnd={() => setIsDragging(false)}
+        onTouchCancel={() => setIsDragging(false)}
         style={{
           height: 4,
           backgroundColor: 'var(--bg-tertiary)',

@@ -8,6 +8,8 @@
  *
  * All per-user scoped. JWT-protected.
  * Does NOT include Native Main Server (id=0) — that's a frontend-only construct.
+ *
+ * Fixes: host URL/IP validation, name/host length limits, NaN guards, proper HTTP status codes.
  */
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -17,8 +19,6 @@ import { authMiddleware } from '../auth.js';
 const router = new Hono();
 
 // All servers routes require auth.
-// Mounted at /api/servers via app.route('/api/servers', ...) — the wildcard auth
-// is scoped to this router's path and won't leak to sibling routes.
 router.use('*', authMiddleware);
 
 /**
@@ -36,15 +36,55 @@ function isValidPort(port: number): boolean {
 }
 
 /**
+ * Validate host is a valid hostname or IP address.
+ * Rejects URLs with schemes, javascript:, data:, etc.
+ */
+function isValidHost(host: string): boolean {
+  if (!host || host.trim().length === 0) return false;
+  if (host.length > 255) return false;
+
+  // Reject schemes
+  if (/^[a-z][a-z0-9+.-]*:/i.test(host)) return false;
+
+  // Allow hostnames, IPs, and optionally port-less hostnames
+  // Basic validation: no spaces, no control chars
+  if (/[\s\x00-\x1f\x7f]/.test(host)) return false;
+
+  // If it contains a colon, it might be IPv6 or host:port
+  // For simplicity, just allow hostnames and IPs without ports
+  // (the port is a separate field)
+  if (host.includes(':')) {
+    // Could be IPv6 address — allow if it looks like one
+    if (!/^\[?[0-9a-fA-F:]+\]?$/.test(host)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Validate server creation/update body fields.
  * Returns an error message string or null if valid.
  */
 function validateServerInput(name: string | undefined, host: string | undefined, port: number | undefined): string | null {
-  if (name !== undefined && name.trim().length === 0) {
-    return 'Server name is required';
+  if (name !== undefined) {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      return 'Server name is required';
+    }
+    if (trimmed.length > 100) {
+      return 'Server name too long (max 100 characters)';
+    }
   }
-  if (host !== undefined && host.trim().length === 0) {
-    return 'Host is required';
+  if (host !== undefined) {
+    const trimmed = host.trim();
+    if (trimmed.length === 0) {
+      return 'Host is required';
+    }
+    if (!isValidHost(trimmed)) {
+      return 'Invalid host (must be a hostname or IP address, no scheme)';
+    }
   }
   if (port !== undefined && !isValidPort(port)) {
     return 'Port must be an integer between 1 and 65535';
@@ -74,7 +114,7 @@ router.get('/', (c: Context) => {
  * POST /api/servers
  * Create a server for the current user.
  * Body: { name: string, host: string, port: number }
- * Returns: { id, name, host, port, createdAt }
+ * Returns: { id, name, host, port, createdAt } with 201
  */
 router.post('/', async (c: Context) => {
   const uid = userId(c);
@@ -104,7 +144,7 @@ router.post('/', async (c: Context) => {
     FROM servers WHERE id = ?
   `).get(info.lastInsertRowid);
 
-  return c.json(server);
+  return c.json(server, 201);
 });
 
 /**
@@ -117,6 +157,9 @@ router.post('/', async (c: Context) => {
 router.put('/:id', async (c: Context) => {
   const uid = userId(c);
   const serverId = Number(c.req.param('id'));
+  if (isNaN(serverId)) {
+    return c.json({ error: 'Invalid server ID' }, 400);
+  }
 
   // Check ownership
   const existing = db.prepare(
@@ -173,6 +216,9 @@ router.put('/:id', async (c: Context) => {
 router.delete('/:id', (c: Context) => {
   const uid = userId(c);
   const serverId = Number(c.req.param('id'));
+  if (isNaN(serverId)) {
+    return c.json({ error: 'Invalid server ID' }, 400);
+  }
 
   const existing = db.prepare(
     'SELECT id FROM servers WHERE id = ? AND user_id = ?'

@@ -17,7 +17,7 @@ export function registerFfplayGuard(): void {
   if (registered) return;
   registered = true;
 
-  const cleanup = (signal: string) => {
+  const cleanup = async (signal: string) => {
     logger.info({ signal }, 'Received shutdown signal — stopping player');
 
     const player = Player.getInstance();
@@ -25,13 +25,14 @@ export function registerFfplayGuard(): void {
       const status = player.getStatus();
       if (status.state !== 'stopped') {
         logger.info('Killing active ffplay subprocess');
-        player.stop();
+        await player.stop(); // Now properly awaited
       }
     } catch (err: any) {
       logger.error({ err }, 'Error during player cleanup');
     }
 
-    // Allow process to exit naturally
+    // Allow process to exit naturally (don't force exit code 0)
+    // Node will exit with code 0 after this async handler completes
     process.exit(0);
   };
 

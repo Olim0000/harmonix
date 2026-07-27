@@ -4,7 +4,7 @@ import { env } from './env.js';
 import { runMigrations } from './db.js';
 import { logger } from './logger.js';
 import { corsMiddleware } from './cors.js';
-import { authMiddleware } from './auth.js';
+import { authMiddleware, requireAdmin } from './auth.js';
 import { registerFfplayGuard } from './player/ffplayGuard.js';
 import authRoutes, { meHandler } from './routes/auth.js';
 import libraryRoutes from './routes/library.js';
@@ -34,7 +34,7 @@ app.use('*', corsMiddleware());
 // Log role on startup
 logger.info({ role, isSource }, 'Harmonix server starting');
 
-// Auth routes (no auth required for register/login)
+// Auth routes (no auth required for register/login/refresh/logout)
 app.route('/api/auth', authRoutes);
 
 // GET /api/me requires auth
@@ -42,9 +42,9 @@ app.get('/api/me', authMiddleware, meHandler);
 
 // Library routes require auth (source only)
 if (isSource) {
-  app.use('/api/artists', authMiddleware);
-  app.use('/api/albums', authMiddleware);
-  app.use('/api/tracks', authMiddleware);
+  app.use('/api/artists*', authMiddleware);
+  app.use('/api/albums*', authMiddleware);
+  app.use('/api/tracks*', authMiddleware);
   app.route('/api', libraryRoutes);
 } else {
   // Player-only: return 404 for library routes
@@ -53,17 +53,23 @@ if (isSource) {
   app.all('/api/tracks*', (c) => c.json({ error: 'Not found' }, 404));
 }
 
-// Search (source only)
+// Search (source only) - requires auth
 if (isSource) {
+  app.use('/api/search*', authMiddleware);
   app.route('/api', searchRoutes);
 } else {
   app.all('/api/search*', (c) => c.json({ error: 'Not found' }, 404));
 }
 
-// Stream (no auth — player-server needs to fetch without auth for local playback)
+// Stream (auth required — player-server uses tokens to fetch)
+app.use('/api/stream*', authMiddleware);
 app.route('/api/stream', streamRoutes);
 
 // Covers (no auth — <img> tags in frontend need direct access)
+// But on source servers, we want auth for privacy; on player servers, no auth
+if (isSource) {
+  app.use('/api/covers*', authMiddleware);
+}
 app.route('/api/covers', coversRoutes);
 
 // Scan routes (source only — admin)
@@ -86,7 +92,12 @@ if (isSource) {
   app.all('/api/servers*', (c) => c.json({ error: 'Not found' }, 404));
 }
 
-// Player routes (all roles)
+// Player routes (all roles) - require auth
+app.use('/api/player*', authMiddleware);
+// On source servers, player routes only for admin
+if (isSource) {
+  app.use('/api/player*', requireAdmin);
+}
 app.route('/api/player', playerRoutes);
 
 // Source info (all roles)

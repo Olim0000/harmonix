@@ -25,10 +25,10 @@ beforeAll(async () => {
   Player = mod.Player;
 });
 
-beforeEach(() => {
+beforeEach(async () => {
   // Get singleton instance — each test gets a fresh reset
   player = Player.getInstance();
-  player.reset();
+  await player.reset();
 });
 
 afterAll(() => {
@@ -165,7 +165,7 @@ describe('Player status', () => {
 describe('Missing ffplay binary', () => {
   it('reports ffplayAvailable=false with graceful error', async () => {
     // Reset singleton with a fake binary path
-    player.reset('/nonexistent/ffplay_xyz');
+    await player.reset('/nonexistent/ffplay_xyz');
     const status = player.getStatus();
     expect(status.ffplayAvailable).toBe(false);
     expect(status.error).toContain('ffplay');
@@ -173,7 +173,7 @@ describe('Missing ffplay binary', () => {
 
   it('play returns error when ffplay missing', async () => {
     // Reset singleton with a fake binary path
-    player.reset('/nonexistent/ffplay_xyz');
+    await player.reset('/nonexistent/ffplay_xyz');
     await expect(player.play(silenceWav)).rejects.toThrow(/ffplay/i);
   });
 });

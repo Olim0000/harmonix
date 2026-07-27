@@ -10,6 +10,8 @@
  *   tracks → title, artist, album
  *   artists → name
  *   albums → title, artist
+ *
+ * Fixes: TOCTOU race using INSERT OR IGNORE + DELETE with atomic check.
  */
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -19,8 +21,6 @@ import { authMiddleware } from '../auth.js';
 const router = new Hono();
 
 // All likes routes require auth.
-// Mounted at /api/likes via app.route('/api/likes', ...) — the wildcard auth
-// is scoped to this router's path and won't leak to sibling routes.
 router.use('*', authMiddleware);
 
 interface LikeRow {
@@ -63,24 +63,21 @@ router.post('/', async (c: Context) => {
     return c.json({ error: 'itemId must be a valid number' }, 400);
   }
 
-  // Check if already liked
-  const existing = db.prepare(
-    'SELECT 1 FROM likes WHERE user_id = ? AND item_type = ? AND item_id = ?'
-  ).get(userId, itemType, itemIdNum);
+  // Atomic toggle: try INSERT OR IGNORE, if it fails (already exists), DELETE
+  // This avoids TOCTOU race between SELECT and INSERT/DELETE
+  const insertResult = db.prepare(
+    'INSERT OR IGNORE INTO likes (user_id, item_type, item_id) VALUES (?, ?, ?)'
+  ).run(userId, itemType, itemIdNum);
 
-  if (existing) {
-    // Unlike
-    db.prepare(
-      'DELETE FROM likes WHERE user_id = ? AND item_type = ? AND item_id = ?'
-    ).run(userId, itemType, itemIdNum);
-    return c.json({ liked: false });
+  if (insertResult.changes > 0) {
+    return c.json({ liked: true });
   }
 
-  // Like
+  // Already existed, so delete it (unlike)
   db.prepare(
-    'INSERT INTO likes (user_id, item_type, item_id) VALUES (?, ?, ?)'
+    'DELETE FROM likes WHERE user_id = ? AND item_type = ? AND item_id = ?'
   ).run(userId, itemType, itemIdNum);
-  return c.json({ liked: true });
+  return c.json({ liked: false });
 });
 
 /**

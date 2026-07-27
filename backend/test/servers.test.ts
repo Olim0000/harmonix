@@ -70,7 +70,7 @@ describe('POST /api/servers', () => {
       headers: auth(token),
       body: JSON.stringify({ name: 'My Server', host: '192.168.1.100', port: 6600 }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = await res.json() as any;
     expect(body.id).toBeGreaterThan(0);
     expect(body.name).toBe('My Server');

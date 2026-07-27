@@ -121,9 +121,9 @@ export function applySchema(database: Database.Database): void {
     );
 
     -- FTS5 virtual table for full-text search across tracks, artists, albums
-    -- content='' means contentless: only the index is stored, content is provided on INSERT
+    -- content='' means only  the index is stored, content is provided on INSERT
     -- contentless_delete=1 enables DELETE/UPDATE (required for sync triggers)
-    DROP TABLE IF EXISTS search_fts;
+    -- IF NOT EXISTS ensures the table survives restarts; we rebuild the index below
     CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
       title,
       artist_name,
@@ -218,6 +218,52 @@ export function initSchema(): void {
   applySchema(db);
 }
 
+/**
+ * Rebuild the FTS5 search index from existing data.
+ * Runs on every startup to ensure search is available after restarts.
+ */
+export function rebuildFtsIndex(): void {
+  logger.info('Rebuilding FTS search index...');
+
+  // Rebuild artists
+  const artists = db.prepare('SELECT id, name FROM artists').all() as { id: number; name: string }[];
+  for (const artist of artists) {
+    db.prepare(
+      'INSERT INTO search_fts(rowid, title, artist_name, album_title) VALUES (?, ?, ?, ?)'
+    ).run(ARTIST_OFFSET + artist.id, artist.name, artist.name, '');
+  }
+
+  // Rebuild albums
+  const albums = db.prepare(`
+    SELECT al.id, al.title, ar.name AS artist_name
+    FROM albums al
+    JOIN artists ar ON ar.id = al.artist_id
+  `).all() as { id: number; title: string; artist_name: string }[];
+  for (const album of albums) {
+    db.prepare(
+      'INSERT INTO search_fts(rowid, title, artist_name, album_title) VALUES (?, ?, ?, ?)'
+    ).run(ALBUM_OFFSET + album.id, album.title, album.artist_name, '');
+  }
+
+  // Rebuild tracks
+  const tracks = db.prepare(`
+    SELECT t.id, t.title, ar.name AS artist_name, al.title AS album_title
+    FROM tracks t
+    JOIN artists ar ON ar.id = t.artist_id
+    JOIN albums al ON al.id = t.album_id
+  `).all() as { id: number; title: string; artist_name: string; album_title: string }[];
+  for (const track of tracks) {
+    db.prepare(
+      'INSERT INTO search_fts(rowid, title, artist_name, album_title) VALUES (?, ?, ?, ?)'
+    ).run(TRACK_OFFSET + track.id, track.title, track.artist_name, track.album_title);
+  }
+
+  logger.info(
+    { artists: artists.length, albums: albums.length, tracks: tracks.length },
+    'FTS search index rebuilt'
+  );
+}
+
 function seedAdminUser(): void {
   const existingAdmin = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
   if (existingAdmin) {
@@ -230,11 +276,12 @@ function seedAdminUser(): void {
   const stmt = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)');
   stmt.run('admin', passwordHash, 'admin');
 
-  logger.info({ password }, 'Admin user created with random password');
+  logger.info('Admin user created with random password (check server logs on first run)');
 }
 
 export function runMigrations(): void {
   initSchema();
+  rebuildFtsIndex();
   seedAdminUser();
 }
 

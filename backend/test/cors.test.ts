@@ -26,10 +26,10 @@ describe('CORS middleware', () => {
     expect(res.headers.get('Vary')).toBe('Origin');
   });
 
-  it('sets Allow-Origin to * and NO Allow-Credentials when no Origin header', async () => {
+  it('sets NO Allow-Origin and NO Allow-Credentials when no Origin header (non-cross-origin)', async () => {
     const a = await getApp();
     const res = await a.request('/test', { method: 'GET' });
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
     expect(res.headers.has('Access-Control-Allow-Credentials')).toBe(false);
   });
 

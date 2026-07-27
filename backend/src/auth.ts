@@ -1,6 +1,7 @@
 import { Context, Next } from 'hono';
 import { verifyToken, extractToken, type TokenPayload } from './jwt.js';
 import { logger } from './logger.js';
+import { isTokenRevoked } from './routes/auth.js';
 
 declare module 'hono' {
   interface ContextVariableMap {
@@ -13,6 +14,11 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   if (!token) {
     logger.debug('Auth failed: no token provided');
     return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  if (isTokenRevoked(token)) {
+    logger.debug('Auth failed: token revoked');
+    return c.json({ error: 'Token revoked' }, 401);
   }
 
   try {

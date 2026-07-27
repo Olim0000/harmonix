@@ -1,11 +1,12 @@
 /**
  * API client — fetch wrapper with auth auto-attach and 401 handling.
  *
- * Base URL is hardcoded to backend (no Vite proxy per locked decision).
+ * Base URL comes from VITE_API_URL env var with a hardcoded fallback.
+ * On 401, tries token refresh + retry before logging out.
  */
 import { useAuthStore } from '../stores/auth';
 
-export const BASE_URL = 'http://localhost:3001/api';
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 export class ApiError extends Error {
   status: number;
@@ -17,6 +18,52 @@ export class ApiError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+/**
+ * Handle 401 response: refresh token and retry the original request once.
+ * Guards against infinite loop on the refresh endpoint itself.
+ * Throws ApiError and redirects to /login on failure.
+ */
+async function handle401(
+  path: string,
+  init: RequestInit,
+  headers: Record<string, string>,
+): Promise<Response> {
+  // Guard: never retry refresh when the failed request IS the refresh endpoint
+  if (path === '/auth/refresh') {
+    useAuthStore.getState().logout();
+    window.location.href = '/login';
+    throw new ApiError(401, { error: 'Session expired' });
+  }
+
+  const authStore = useAuthStore.getState();
+  try {
+    await authStore.refresh();
+    const newToken = useAuthStore.getState().token;
+    if (!newToken) {
+      // Refresh failed — store already logged out
+      throw new Error('Refresh failed');
+    }
+
+    // Retry original request with fresh token
+    const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+    const retryRes = await fetch(`${BASE_URL}${path}`, { ...init, headers: retryHeaders });
+
+    // If retry didn't return 401, pass it back for normal processing
+    // (including non-401 errors like 403/404/500 — let the caller handle those)
+    if (retryRes.status !== 401) {
+      return retryRes;
+    }
+    // Retry also got 401 — token refresh didn't help, fall through to logout
+  } catch {
+    // Refresh itself failed (network error, parse error, etc.)
+  }
+
+  // All recovery paths exhausted — log out and redirect
+  useAuthStore.getState().logout();
+  window.location.href = '/login';
+  throw new ApiError(401, { error: 'Session expired' });
 }
 
 export async function api<T>(
@@ -34,15 +81,14 @@ export async function api<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  let res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers,
   });
 
   if (res.status === 401) {
-    useAuthStore.getState().logout();
-    window.location.href = '/login';
-    throw new ApiError(401, { error: 'Session expired' });
+    // handle401 tries refresh + retry; throws on failure
+    res = await handle401(path, init, headers);
   }
 
   // Handle 204 No Content
@@ -84,15 +130,14 @@ export async function apiRaw(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  let res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers,
   });
 
   if (res.status === 401) {
-    useAuthStore.getState().logout();
-    window.location.href = '/login';
-    throw new ApiError(401, { error: 'Session expired' });
+    // handle401 tries refresh + retry; throws on failure
+    res = await handle401(path, init, headers);
   }
 
   return res;
